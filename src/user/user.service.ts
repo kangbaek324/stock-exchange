@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
@@ -25,8 +25,7 @@ export class UserService {
             });
             return result ? true : false;
         } catch (err) {
-            console.log(err);
-            throw new InternalServerErrorException("회원가입중 오류가 발생했습니다");
+            return false;
         }
     }
 
@@ -44,8 +43,7 @@ export class UserService {
                 });
                 return result ? true : false;
             } catch (err) {
-                console.log(err);
-                throw new InternalServerErrorException();
+                return false;
             }
         }
 
@@ -63,8 +61,7 @@ export class UserService {
             });
             return result ? true : false;
         } catch (err) {
-            console.log(err);
-            throw new InternalServerErrorException();
+            return false;
         }
     }
 

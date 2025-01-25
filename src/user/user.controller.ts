@@ -15,9 +15,9 @@ export class UserController {
         if (await this.userService.checkEmailDuplicate(SignupData.email)) {
             throw new BadRequestException("이미 사용중인 이메일입니다");
         }
-        if (await !this.userService.signup(SignupData)) {
+        if (!(await this.userService.signup(SignupData))) {
             throw new InternalServerErrorException("회원가입에 실패했습니다");
-        }
+        }        
     }
 
     @Post("/sign-in")
