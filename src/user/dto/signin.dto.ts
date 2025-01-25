@@ -1,8 +1,9 @@
-import { IsAlpha, IsString } from "class-validator";
+import { IsAlpha, IsString, Max, Min } from "class-validator";
 
 export class SigninDto {
     @IsString()
-    @IsAlpha()
+    @Min(5)
+    @Max(20)
     username: string;
     
     @IsString()

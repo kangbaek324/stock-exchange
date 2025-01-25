@@ -1,8 +1,8 @@
-import { IsAlpha, IsEmail, IsPhoneNumber, IsString, IsStrongPassword } from "class-validator";
+import { IsEmail, IsString, IsStrongPassword, Length } from "class-validator";
 
 export class SignupDto {
     @IsString()
-    @IsAlpha()
+    @Length(5, 20)
     username: string;
 
     @IsString()
@@ -13,10 +13,6 @@ export class SignupDto {
         minSymbols: 1
     })
     password: string;
-
-    @IsString()
-    @IsPhoneNumber("KR")
-    phone: number;
 
     @IsString()
     @IsEmail()

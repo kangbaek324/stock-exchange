@@ -11,7 +11,6 @@ model users {
   id Int @id @default(autoincrement())
   username String @db.VarChar(20) @unique
   password String @db.VarChar(60)
-  phone String @db.Char(13) @unique
   email String @db.VarChar(50) @unique
   created_at DateTime @default(now())
 
@@ -91,4 +90,5 @@ model order_match {
   // order order @relation("Order", fields: [order_id], references: [id])
 }
 
-//주석 처리된 부분 외래키 오류 해걀 필요
+//주석 처리된 부분 외래키 오류 해결 필요
+//now() 한국시간으로 변경필요
