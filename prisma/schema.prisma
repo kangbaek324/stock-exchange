@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model users {
+  id Int @id @default(autoincrement())
+  username String @db.VarChar(20) @unique
+  password String @db.VarChar(60)
+  phone String @db.Char(13) @unique
+  email String @db.VarChar(50) @unique
+  created_at DateTime @default(now())
+
+  accounts accounts[]
+}
+
+model accounts {
+  id Int @id @default(autoincrement())
+  user_id Int
+  account_number Int @unique
+  money BigInt
+  created_at DateTime @default(now())
+
+  users users @relation(fields: [user_id], references: [id])
+  users_stocks users_stocks[]
+  order order[]
+}
+
+model stocks {
+  id Int @id @default(autoincrement())
+  stock_name String @db.VarChar(30) @unique
+  stock_price Int
+  created_at DateTime @default(now())
+  broken_at DateTime
+
+  users_stocks users_stocks[]
+  order order[]
+  order_match order_match[]
+}
+
+model users_stocks {
+  id Int @id @default(autoincrement())
+  account_id Int 
+  stock_id Int
+  number Int
+  average Float @db.Double
+
+  accounts accounts @relation(fields: [account_id], references: [id])
+  stocks stocks @relation(fields: [stock_id], references: [id])
+}
+
+enum OrderType {
+  limit
+  market
+}
+
+enum TradingType {
+  buy
+  sell
+}
+
+model order {
+  id Int @id @default(autoincrement())
+  account_id Int
+  stock_id Int 
+  price Int 
+  number Int
+  order_type OrderType
+  trading_type TradingType
+  created_at DateTime @default(now())
+
+  accounts accounts @relation(fields: [account_id], references: [id])
+  stocks stocks @relation(fields: [stock_id], references: [id])
+  // order_match order_match[]
+}
+
+model order_match {
+  id Int @id @default(autoincrement())
+  stock_id Int
+  number Int 
+  initial_order_id Int 
+  order_id Int
+  matched_at DateTime @default(now())
+
+  stocks stocks @relation(fields: [stock_id], references: [id])
+  // initial_order order @relation("InitialOrder", fields: [initial_order_id], references: [id])
+  // order order @relation("Order", fields: [order_id], references: [id])
+}
+
+//주석 처리된 부분 외래키 오류 해걀 필요
