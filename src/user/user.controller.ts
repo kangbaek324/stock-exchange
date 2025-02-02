@@ -1,32 +1,34 @@
-import { Body, Controller, Post, BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { SignupDto } from './dto/signup.dto';
-import { SigninDto } from './dto/signin.dto';
+import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { UserService } from './user.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Controller('user')
 export class UserController {
-    constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) {}
 
-    @Post("/sign-up")
-    async signup(@Body() SignupData: SignupDto) {
-        if (await this.userService.checkUsernameDuplicate(SignupData.username)) {
-            throw new BadRequestException("이미 사용중인 이름입니다");
-        }
-        if (await this.userService.checkEmailDuplicate(SignupData.email)) {
-            throw new BadRequestException("이미 사용중인 이메일입니다");
-        }
-        if (!(await this.userService.signup(SignupData))) {
-            throw new InternalServerErrorException("회원가입에 실패했습니다");
-        }        
-    }
+  @Post()
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.userService.create(createUserDto);
+  }
 
-    @Post("/sign-in")
-    signin(@Body() signinData: SigninDto ) {
-        return "success";
-    }
+  @Get()
+  findAll() {
+    return this.userService.findAll();
+  }
 
-    @Post("/account/create")
-    accountCreate(): string {
-        return "success";
-    }
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.userService.findOne(+id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.userService.update(+id, updateUserDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.userService.remove(+id);
+  }
 }
