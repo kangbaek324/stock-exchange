@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { GetUser } from './decorator/get-user.decorator';
+import { Payload } from './interface/payload.interface';
 
 @Controller('auth')
 export class AuthController {
@@ -22,13 +23,14 @@ export class AuthController {
     @Post("/sign-in")
     async signin(@Body() signinData: SigninDto, @Res() res: Response): Promise<void> {
         const jwt = await this.authService.signin(signinData)
+        //여기 수정필요함 인터셉터로 옮기기
         res.setHeader('Authorization', jwt.accessToken);
         res.json(jwt)
     }
 
     @Post("/account/create")
-    @UseGuards(AuthGuard())
-    async accountCreate(@GetUser() user): Promise<void> {
+    @UseGuards(AuthGuard("jwt"))
+    async accountCreate(@GetUser() user: Payload): Promise<void> {
         await this.authService.createAccount(user);
     }
 }

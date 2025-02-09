@@ -35,7 +35,7 @@
     >> 특정 주문 취소
 
 ## 조회
-1. 미체결 주문 조회 GET ( user/stock/orders?status=not-match )
+1. 미체결 주문 조회 GET ( user/stock/orders?status=not-match&account_number=1000 )
 2. 체결 주문 조회 GET ( user/stock/orders?status=match )
 3. 전체 주문 조회 GET ( user/stock/orders )
 
@@ -54,3 +54,7 @@
     더이상 체결할게 없으면 호가에 남은 잔량 띄우기
 # 시장가 market
     똑같음 무조건 다 체결되야됨 호가가 부족해서 체결안되면 현재가에 지정가로 잔량으로 남음
+
+
+* 계좌 초기 세팅
+insert into accounts (user_id, account_number, money) values(1, 1000, 100000000);

@@ -12,9 +12,9 @@ import { JwtStrategy } from './jwt/jwt.strategy';
     }),
     JwtModule.register({
     secret: "orderbook",
-    signOptions: {
-      expiresIn: "3600s"
-    },
+    // signOptions: {
+    //   expiresIn: undefined
+    // },
   })],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

@@ -31,10 +31,10 @@ model accounts {
 
 model stocks {
   id          Int      @id @default(autoincrement())
-  stock_name  String   @unique @db.VarChar(30)
-  stock_price Int
+  name  String   @unique @db.VarChar(30)
+  price Int
   created_at  DateTime @default(now())
-  broken_at   DateTime
+  broken_at   DateTime?
 
   users_stocks users_stocks[]
   order        order[]
@@ -62,13 +62,21 @@ enum TradingType {
   sell
 }
 
+enum status {
+  y
+  n
+  c
+}
+
 model order {
   id           Int         @id @default(autoincrement())
   account_id   Int
   stock_id     Int
   price        Int
   number       Int
+  match_number       Int? @default(0)
   order_type   OrderType
+  status       status? @default(n)
   trading_type TradingType
   created_at   DateTime    @default(now())
 

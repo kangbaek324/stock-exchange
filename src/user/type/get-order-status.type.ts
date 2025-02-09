@@ -1,0 +1,1 @@
+export type GetOrderStatus = "match" | "not-match"

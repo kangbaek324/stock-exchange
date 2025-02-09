@@ -79,7 +79,6 @@ export class AuthService {
         try {
             findUser = await this.prisma.users.findUnique({
                 where : { username : signinData.username },
-                select : { password: true }
             })
         } catch (err) {
             console.log(err)
@@ -89,7 +88,7 @@ export class AuthService {
         if (findUser) {
             const match = await bcrypt.compare(signinData.password, findUser.password)
             if (match) {
-                const payload: Payload = { username: signinData.username }
+                const payload: Payload = { user_id: findUser.id, username: signinData.username }
                 const jwt: Jwt = { accessToken : this.jwtService.sign(payload) };
                 return jwt
             } else {
