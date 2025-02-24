@@ -4,10 +4,10 @@ enum OrderType { limit = "limit", market = "market" }
 
 export class BuyDto {
     @IsInt()
-    account_number: number;
+    accountNumber: number;
 
     @IsInt()
-    stock_id: number;
+    stockId: number;
 
     @IsInt()
     price: number;
@@ -16,5 +16,5 @@ export class BuyDto {
     number: number;
 
     @IsEnum(OrderType)
-    order_type: OrderType;
+    orderType: OrderType;
 }

@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { SigninDto } from './dto/signin.dto';
-import { SignupDto } from './dto/signup.dto';
+import { SigninDto } from './dtos/signin.dto';
+import { SignupDto } from './dtos/signup.dto';
 import { JwtService } from '@nestjs/jwt';
-import { Payload } from './interface/payload.interface';
-import { Jwt } from './interface/jwt.interface';
+import { Payload } from './interfaces/payload.interface';
+import { Jwt } from './interfaces/jwt.interface';
 
 const salt = 10;
 
@@ -88,7 +88,7 @@ export class AuthService {
         if (findUser) {
             const match = await bcrypt.compare(signinData.password, findUser.password)
             if (match) {
-                const payload: Payload = { user_id: findUser.id, username: signinData.username }
+                const payload: Payload = { userId: findUser.id, username: signinData.username }
                 const jwt: Jwt = { accessToken : this.jwtService.sign(payload) };
                 return jwt
             } else {

@@ -5,8 +5,6 @@
 
 1. 회원가입 POST ( user/sign-up )
     params : username, password, phone, email 
-    회원가입 요청 -> 휴대폰으로 인증 메시지 전달
-    >> 인증완료시 이메일로 가입 환영 문구전달
 
 2. 로그인 POST ( user/sign-in )
     params : username, password
@@ -18,24 +16,27 @@
 # user stock api // 유저와 주식간의 상호작용 api
 
 ## 주문
-1. 매수주문 POST ( user/stock/orders )
+1. 매수주문 POST ( user/stock/orders/buy )
     params : stock_id, price, number, order_type, trading_type
     >> 매수주문 생성 trading_type : buy
 
-2. 매도주문 POST ( user/stock/orders )
+2. 매도주문 POST ( user/stock/orders/sell )
     params : stock_id, price, number, order_type, trading_type
     >> 매도주문 생성 trading_type : sell
 
-3. 정정주문 PUT ( user/stock/orders/{order_id} )
+3. 정정주문 PUT ( user/stock/orders/edit )
     params : order_id, price
     >> 특정 주문 정정
+    >> 가격만 정정 가능
 
-5. 취소주문 DELTE ( user/stock/orders/{order_id} )
+5. 취소주문 DELTE ( user/stock/orders/cancell )
     params : order_id
     >> 특정 주문 취소
+    >> 전체 취소만 가능 (일부 취소 불가능)
+    >> 만약 10주 매수주문을 넣었는데 이미 5주가 체결됬을경우에는 미체결 분량이 취소
 
 ## 조회
-1. 미체결 주문 조회 GET ( user/stock/orders?status=not-match&account_number=1000 )
+1. 미체결 주문 조회 GET ( user/stock/orders?status=not_match&account_number=1000 )
 2. 체결 주문 조회 GET ( user/stock/orders?status=match )
 3. 전체 주문 조회 GET ( user/stock/orders )
 

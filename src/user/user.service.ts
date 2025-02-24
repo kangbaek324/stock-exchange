@@ -1,73 +1,123 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { BuyDto } from './dto/buy.dto';
-import { SellDto } from './dto/sell.dto';
+import { BuyDto } from './dtos/buy.dto';
+import { SellDto } from './dtos/sell.dto';
+import { CancellDto } from './dtos/cancell.dto';
+import { OrderValidationService } from './order-validation.service';
+import { OrderService } from './order.service';
+import { GetOrderDto } from './dtos/get-order.dto';
+import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly orderValidation: OrderValidationService,
+    private readonly order: OrderService,
+    private readonly websocket: WebsocketGateway
+  ) {}
 
-  async getOrder(query) {
-    // 그냥 덜 만들었음 ㅎ.ㅎ
-    console.log(query)
-    if (query.status) {
-      if (query.status == "match") {
-        await this.prisma.accounts.findMany({
-          where: { account_number: query.account_number },
-          include: { order: true }
-        })
+  async getOrder(query: GetOrderDto, user) {
+    const validationResultCode = await this.orderValidation.getOrderValidate(query, user)
+    if (validationResultCode == 1) {
+      throw new BadRequestException("잘못된 계좌번호입니다")
+    } else if (validationResultCode == 2) {
+      throw new BadRequestException("올바르지 않은 계좌번호입니다")
+    }
+
+    try {
+      const accountId = await this.prisma.accounts.findUnique({
+        where : {
+          account_number : query.accountnumber
+        },
+        select : {
+          id : true
+        }
+      });
+
+      if (query.status) {
+        if (query.status == "matched") {
+          return await this.prisma.order.findMany({
+            where : {
+              account_id : accountId.id,
+              status : "y"
+            },
+            include : {
+              stocks : {
+                select : {
+                  name : true
+                }
+              }
+            }
+          });
+        } else {
+          return await this.prisma.order.findMany({
+            where : {
+              account_id : accountId.id,
+              status : "n"
+            },
+            include : {
+              stocks : {
+                select : {
+                  name : true
+                }
+              }
+            }
+          });
+        }
       } else {
-
+        return await this.prisma.order.findMany({
+          where : {
+            account_id : accountId.id
+          },
+          include : {
+            stocks : {
+              select : {
+                name : true
+              }
+            }
+          }
+        });
       }
-    } else {
-
+    } catch(err) {
+      console.log(err)
+      throw new BadRequestException("서버에 오류가 발생했습니다");
     }
   }
 
   async buy(data: BuyDto, user) {
-    let errorNumber;
+    const validationResultCode = await this.orderValidation.buySellValidate(data, user);
+    if (validationResultCode == 1) {
+      throw new BadRequestException("잘못된 계좌번호입니다")
+    } else if (validationResultCode == 2) {
+      throw new BadRequestException("올바르지 않은 계좌번호입니다")
+    } else if (validationResultCode == 3) {
+      throw new BadRequestException("잘못된 stock_id입니다")
+    }
+
     try {
-      // 유효성 검사
-      const accountCheck = await this.prisma.accounts.findUnique({
-        where: { account_number: data.account_number },
-      });
-
-      if (!accountCheck) {
-        errorNumber = 1;
-        throw Error("잘못된 계좌번호");
-      } else if (accountCheck.user_id != user.id) {
-        errorNumber = 2;
-        throw Error("올바르지 않은 계좌번호")
-      }
-
-      const stockIdCheck = await this.prisma.stocks.findUnique({
-        where: { id: data.stock_id },
-        select: { id: true }
-      });
-
-      if (!stockIdCheck) {
-        errorNumber = 3;
-        throw Error("올바르지 않은 stock_id")
-      }
-
       await this.prisma.$transaction(async (prisma) => {
+        const getAccountId = await this.prisma.accounts.findUnique({
+          where: { account_number: data.accountNumber },
+          select : { id : true }
+        });
         let submitOrder;
-        if (data.order_type == "market") {
+        if (data.orderType == "market") {
           submitOrder = await prisma.order.create({
             data: {
-              account_id: accountCheck.id,
-              stock_id: data.stock_id,
+              account_id: getAccountId.id,
+              stock_id: data.stockId,
               price: 0,
               number: data.number,
               order_type: "market",
               trading_type: "buy"
             }
           });
-        } else if(data.order_type == "limit") {
+        } else if(data.orderType == "limit") {
           submitOrder = await prisma.order.create({
             data: {
-              account_id: accountCheck.id,
-              stock_id: data.stock_id,
+              account_id: getAccountId.id,
+              stock_id: data.stockId,
               price: data.price,
               number: data.number,
               order_type: "limit",
@@ -75,233 +125,50 @@ export class UserService {
             }
           });
         }
-
-        while (true) {
-          submitOrder = await prisma.order.findUnique({
-            where: { id: submitOrder.id }
-          });
-
-          let findOrder;
-
-          if (data.order_type == "market") {
-            findOrder = await prisma.order.findFirst({
-              where: {
-                stock_id: data.stock_id,
-                trading_type: "sell",
-                status: "n",
-              },
-              orderBy: [
-                { price: "asc" },
-                { created_at: "asc" },
-              ],
-            });
-          } else if (data.order_type == "limit") {
-            findOrder = await prisma.order.findFirst({
-              where: {
-                stock_id: data.stock_id,
-                trading_type: "sell",
-                status: "n",
-                price: {
-                  lte: data.price,
-                },
-              },
-              orderBy: [
-                { price: "asc" },
-                { created_at: "asc" },
-              ],
-            });
-          }
-
-          if (findOrder) {
-            if (submitOrder.number - submitOrder.match_number == findOrder.number - findOrder.match_number) {
-              await prisma.order.update({
-                where: {
-                  id: submitOrder.id
-                },
-                data: {
-                  status: "y",
-                  match_number: submitOrder.number
-                }
-              });
-        
-              await prisma.order.update({
-                where: {
-                  id: findOrder.id
-                },
-                data: {
-                  status: "y",
-                  match_number: findOrder.number
-                }
-              });
-        
-              await prisma.order_match.create({
-                data: {
-                  stock_id: data.stock_id,
-                  number: submitOrder.number - submitOrder.match_number,
-                  initial_order_id: findOrder.id,
-                  order_id: submitOrder.id
-                }
-              });
-
-              await prisma.stocks.update({
-                where : { id : data.stock_id },
-                data : {
-                  price : findOrder.price
-                }
-              });
-
-              return;
-            }
-            else if (submitOrder.number - submitOrder.match_number < findOrder.number - findOrder.match_number) {
-              await prisma.order.update({
-                where: {
-                  id: submitOrder.id
-                },
-                data: {
-                  status: "y",
-                  match_number: submitOrder.number
-                }
-              });
-        
-              await prisma.order.update({
-                where: {
-                  id: findOrder.id
-                },
-                data: {
-                  match_number: findOrder.match_number + (submitOrder.number - submitOrder.match_number)
-                }
-              });
-        
-              await prisma.order_match.create({
-                data: {
-                  stock_id: data.stock_id,
-                  number: submitOrder.number - submitOrder.match_number,
-                  initial_order_id: findOrder.id,
-                  order_id: submitOrder.id
-                }
-              });
-
-              await prisma.stocks.update({
-                where : { id : data.stock_id },
-                data : {
-                  price : findOrder.price
-                }
-              });
-
-              return;
-            }
-            else if (submitOrder.number - submitOrder.match_number > findOrder.number - findOrder.match_number) {
-              await prisma.order.update({
-                where: {
-                  id: submitOrder.id
-                },
-                data: {
-                  match_number: submitOrder.match_number + (findOrder.number - findOrder.match_number)
-                }
-              });
-        
-              await prisma.order.update({
-                where: {
-                  id: findOrder.id
-                },
-                data: {
-                  status: "y",
-                  match_number: findOrder.number
-                }
-              });
-        
-              await prisma.order_match.create({
-                data: {
-                  stock_id: data.stock_id,
-                  number: findOrder.number - findOrder.match_number,
-                  initial_order_id: findOrder.id,
-                  order_id: submitOrder.id
-                }
-              });
-
-              await prisma.stocks.update({
-                where : { id : data.stock_id },
-                data : {
-                  price : findOrder.price
-                }
-              });
-
-            }
-          } else {
-            if (submitOrder.number != submitOrder.match_number && submitOrder.order_type == "market") {
-              const stockPriceNow = await prisma.stocks.findUnique({
-                where : { id : submitOrder.stock_id },
-                select : { price : true }
-              }); 
-              await prisma.order.update({
-                where : { id : submitOrder.id },
-                data : { price : stockPriceNow.price }
-              });
-            }
-            return;
-          }
-        }
+        await this.order.order(prisma, data, submitOrder, "buy");
       });
+      await this.websocket.stockUpdate();
     } catch (err) {
       console.log(err)
-      if (errorNumber == 1) {
-        throw new BadRequestException("잘못된 계좌번호 입니다");
-      } else if (errorNumber == 2) {
-        throw new BadRequestException("올바르지 않은 계좌번호 입니다")
-      } else if (errorNumber == 3) {
-        throw new BadRequestException("올바르지 않은 stock_id 입니다")
-      } else {
-        throw new InternalServerErrorException("서버에 오류가 발생했습니다");
-      } 
+      throw new InternalServerErrorException("서버에 오류가 발생했습니다");
     }
   }
 
 
   async sell(data: SellDto, user) {
-    let errorNumber;
+    const validationResultCode = await this.orderValidation.buySellValidate(data, user);
+    if (validationResultCode == 1) {
+      throw new BadRequestException("잘못된 계좌번호입니다")
+    } else if (validationResultCode == 2) {
+      throw new BadRequestException("올바르지 않은 계좌번호입니다")
+    } else if (validationResultCode == 3) {
+      throw new BadRequestException("잘못된 stock_id입니다")
+    }
+
     try {
-      // 유효성 검사
-      const accountCheck = await this.prisma.accounts.findUnique({
-        where: { account_number: data.account_number },
+      const getAccountId = await this.prisma.accounts.findUnique({
+        where: { account_number: data.accountNumber },
+        select : { id : true }
       });
-
-      if (!accountCheck) {
-        errorNumber = 1;
-        throw Error("잘못된 계좌번호");
-      } else if (accountCheck.user_id != user.id) {
-        errorNumber = 2;
-        throw Error("올바르지 않은 계좌번호")
-      }
-
-      const stockIdCheck = await this.prisma.stocks.findUnique({
-        where: { id: data.stock_id },
-        select: { id: true }
-      });
-
-      if (!stockIdCheck) {
-        errorNumber = 3;
-        throw Error("올바르지 않은 stock_id")
-      }
-
       //주문 등록 및 즉시 체결가능한 주문 체결
       await this.prisma.$transaction(async (prisma) => {
         let submitOrder;
-        if (data.order_type == "market") {
+        if (data.orderType == "market") {
           submitOrder = await prisma.order.create({
             data: {
-              account_id: accountCheck.id,
-              stock_id: data.stock_id,
+              account_id: getAccountId.id,
+              stock_id: data.stockId,
               price: 0,
               number: data.number,
               order_type: "market",
               trading_type: "sell"
             }
           });
-        } else if (data.order_type == "limit") {
+        } else if (data.orderType == "limit") {
           submitOrder = await prisma.order.create({
             data: {
-              account_id: accountCheck.id,
-              stock_id: data.stock_id,
+              account_id: getAccountId.id,
+              stock_id: data.stockId,
               price: data.price,
               number: data.number,
               order_type: "limit",
@@ -309,184 +176,45 @@ export class UserService {
             }
           });
         }
-
-        while (true) {
-          submitOrder = await prisma.order.findUnique({
-            where: { id: submitOrder.id }
-          });
-
-          let findOrder;
-
-          if (data.order_type == "market") {
-            findOrder = await prisma.order.findFirst({
-              where: {
-                stock_id: data.stock_id,
-                trading_type: "buy",
-                status: "n",
-              },
-              orderBy: [
-                { price: "desc" },
-                { created_at: "asc" },
-              ],
-            });
-          } else if (data.order_type == "limit") {
-            findOrder = await prisma.order.findFirst({
-              where: {
-                stock_id: data.stock_id,
-                trading_type: "buy",
-                status: "n",
-                price: {
-                  gte: data.price,
-                },
-              },
-              orderBy: [
-                { price: "desc" },
-                { created_at: "asc" },
-              ],
-            });
-          }
-          if (findOrder) {
-            if (submitOrder.number - submitOrder.match_number == findOrder.number - findOrder.match_number) {
-              await prisma.order.update({
-                where: {
-                  id: submitOrder.id
-                },
-                data: {
-                  status: "y",
-                  match_number: submitOrder.number
-                }
-              });
-        
-              await prisma.order.update({
-                where: {
-                  id: findOrder.id
-                },
-                data: {
-                  status: "y",
-                  match_number: findOrder.number
-                }
-              });
-        
-              await prisma.order_match.create({
-                data: {
-                  stock_id: data.stock_id,
-                  number: submitOrder.number - submitOrder.match_number,
-                  initial_order_id: findOrder.id,
-                  order_id: submitOrder.id
-                }
-              });
-
-              await prisma.stocks.update({
-                where : { id : data.stock_id },
-                data : {
-                  price : findOrder.price
-                }
-              });
-
-              return;
-            }
-            else if (submitOrder.number - submitOrder.match_number < findOrder.number - findOrder.match_number) {
-              await prisma.order.update({
-                where: {
-                  id: submitOrder.id
-                },
-                data: {
-                  status: "y",
-                  match_number: submitOrder.number
-                }
-              });
-        
-              await prisma.order.update({
-                where: {
-                  id: findOrder.id
-                },
-                data: {
-                  match_number: findOrder.match_number + (submitOrder.number - submitOrder.match_number)
-                }
-              });
-        
-              await prisma.order_match.create({
-                data: {
-                  stock_id: data.stock_id,
-                  number: submitOrder.number - submitOrder.match_number,
-                  initial_order_id: findOrder.id,
-                  order_id: submitOrder.id
-                }
-              });
-
-              await prisma.stocks.update({
-                where : { id : data.stock_id },
-                data : {
-                  price : findOrder.price
-                }
-              });
-
-              return;
-            }
-            else if (submitOrder.number - submitOrder.match_number > findOrder.number - findOrder.match_number) {
-              await prisma.order.update({
-                where: {
-                  id: submitOrder.id
-                },
-                data: {
-                  match_number: submitOrder.match_number + (findOrder.number - findOrder.match_number)
-                }
-              });
-        
-              await prisma.order.update({
-                where: {
-                  id: findOrder.id
-                },
-                data: {
-                  status: "y",
-                  match_number: findOrder.number
-                }
-              });
-        
-              await prisma.order_match.create({
-                data: {
-                  stock_id: data.stock_id,
-                  number: findOrder.number - findOrder.match_number,
-                  initial_order_id: findOrder.id,
-                  order_id: submitOrder.id
-                }
-              });
-
-              await prisma.stocks.update({
-                where : { id : data.stock_id },
-                data : {
-                  price : findOrder.price
-                }
-              });
-
-            }
-          } else {
-            if (submitOrder.number != submitOrder.match_number && submitOrder.order_type == "market") {
-              const stockPriceNow = await prisma.stocks.findUnique({
-                where : { id : submitOrder.stock_id },
-                select : { price : true }
-              }); 
-              await prisma.order.update({
-                where : { id : submitOrder.id },
-                data : { price : stockPriceNow.price }
-              });
-            }
-            return;
-          }
-        }
-
-      })
+        await this.order.order(prisma, data, submitOrder, "sell");
+      });
+      await this.websocket.stockUpdate();
     } catch (err) {
       console.log(err)
-      if (errorNumber == 1) {
-        throw new BadRequestException("잘못된 계좌번호 입니다");
-      } else if (errorNumber == 2) {
-        throw new BadRequestException("올바르지 않은 계좌번호 입니다")
-      } else if (errorNumber == 3) {
-        throw new BadRequestException("올바르지 않은 stock_id 입니다")
-      } else {
-        throw new InternalServerErrorException("서버에 오류가 발생했습니다");
-      } 
+      throw new InternalServerErrorException("서버에 오류가 발생했습니다");
+    }
+  }
+
+  async edit(data, user) {
+
+  }
+
+  async cancell(data: CancellDto, user) {
+    const validationResultCode = await this.orderValidation.cancellValidate(data, user);
+    if (validationResultCode == 1) {
+      throw new BadRequestException("잘못된 계좌번호입니다")
+    } else if (validationResultCode == 2) {
+      throw new BadRequestException("올바르지 않은 계좌번호입니다")
+    } else if (validationResultCode == 3) {
+      throw new BadRequestException("잘못된 order_id 입니다")
+    } else if (validationResultCode == 4) {
+      throw new BadRequestException("올바르지 않은 order_id 입니다")
+    } else if (validationResultCode == 5) {
+      throw new BadRequestException("이미 취소된 주문 입니다")
+    }
+    try {
+      await this.prisma.order.update({
+        data : {
+          status : "c"
+        },
+        where : {
+          id : data.orderId
+        }
+      });
+      await this.websocket.stockUpdate();
+    } catch(err) {
+      console.log(err)
+      throw new InternalServerErrorException("서버에 오류가 발생했습니다");
     }
   }
 }

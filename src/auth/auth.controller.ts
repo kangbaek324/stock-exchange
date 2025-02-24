@@ -1,11 +1,11 @@
 import { Body, Controller, Post, BadRequestException, Res, UseGuards } from '@nestjs/common';
-import { SignupDto } from './dto/signup.dto';
-import { SigninDto } from './dto/signin.dto';
+import { SignupDto } from './dtos/signup.dto';
+import { SigninDto } from './dtos/signin.dto';
 import { AuthService } from './auth.service';
 import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
-import { GetUser } from './decorator/get-user.decorator';
-import { Payload } from './interface/payload.interface';
+import { GetUser } from '../common/decorator/get-user.decorator';
+import { Payload } from './interfaces/payload.interface';
 
 @Controller('auth')
 export class AuthController {
