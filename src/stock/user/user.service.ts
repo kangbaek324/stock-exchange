@@ -93,39 +93,60 @@ export class UserService {
       throw new BadRequestException("올바르지 않은 계좌번호입니다")
     } else if (validationResultCode == 3) {
       throw new BadRequestException("잘못된 stock_id입니다")
+    } else if (validationResultCode == 4) {
+      throw new BadRequestException("1만주를 초과한 주문은 불가능합니다")
+    } else if (validationResultCode == 5) {
+      throw new BadRequestException("0원 이하의 주문은 불가능합니다")
     }
-
     try {
       await this.prisma.$transaction(async (prisma) => {
+        const maxRetries = 5; // 최대 재시도 횟수
+        let attempt = 0;
+        let success = false;
         const getAccountId = await this.prisma.accounts.findUnique({
           where: { account_number: data.accountNumber },
           select : { id : true }
         });
-        let submitOrder;
-        if (data.orderType == "market") {
-          submitOrder = await prisma.order.create({
-            data: {
-              account_id: getAccountId.id,
-              stock_id: data.stockId,
-              price: 0,
-              number: data.number,
-              order_type: "market",
-              trading_type: "buy"
+        while(attempt < maxRetries && !success) {
+          let submitOrder;
+          if (data.orderType == "market") {
+            submitOrder = await prisma.order.create({
+              data: {
+                account_id: getAccountId.id,
+                stock_id: data.stockId,
+                price: 0,
+                number: data.number,
+                order_type: "market",
+                trading_type: "buy"
+              }
+            });
+          } else if(data.orderType == "limit") {
+            submitOrder = await prisma.order.create({
+              data: {
+                account_id: getAccountId.id,
+                stock_id: data.stockId,
+                price: data.price,
+                number: data.number,
+                order_type: "limit",
+                trading_type: "buy"
+              }
+            });
+          }
+          try {
+            await this.order.order(prisma, data, submitOrder, "buy");
+            success = true;
+            return;
+          } catch (error) {
+            if (error.code === 'P2034') {
+                attempt++;
+                console.log(`Retrying transaction... Attempt ${attempt}`);
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } else {
+                console.log(error)
+                throw Error("Internet server Error")
             }
-          });
-        } else if(data.orderType == "limit") {
-          submitOrder = await prisma.order.create({
-            data: {
-              account_id: getAccountId.id,
-              stock_id: data.stockId,
-              price: data.price,
-              number: data.number,
-              order_type: "limit",
-              trading_type: "buy"
-            }
-          });
+          }
         }
-        await this.order.order(prisma, data, submitOrder, "buy");
       });
       await this.websocket.stockUpdate();
     } catch (err) {
@@ -143,40 +164,61 @@ export class UserService {
       throw new BadRequestException("올바르지 않은 계좌번호입니다")
     } else if (validationResultCode == 3) {
       throw new BadRequestException("잘못된 stock_id입니다")
+    } else if (validationResultCode == 4) {
+      throw new BadRequestException("1만주를 초과한 주문은 불가능합니다")
+    } else if (validationResultCode == 5) {
+      throw new BadRequestException("0원 이하의 주문은 불가능합니다")
     }
-
     try {
-      const getAccountId = await this.prisma.accounts.findUnique({
-        where: { account_number: data.accountNumber },
-        select : { id : true }
-      });
       //주문 등록 및 즉시 체결가능한 주문 체결
       await this.prisma.$transaction(async (prisma) => {
-        let submitOrder;
-        if (data.orderType == "market") {
-          submitOrder = await prisma.order.create({
-            data: {
-              account_id: getAccountId.id,
-              stock_id: data.stockId,
-              price: 0,
-              number: data.number,
-              order_type: "market",
-              trading_type: "sell"
+        const maxRetries = 5; // 최대 재시도 횟수
+        let attempt = 0;
+        let success = false;
+        const getAccountId = await this.prisma.accounts.findUnique({
+          where: { account_number: data.accountNumber },
+          select : { id : true }
+        });
+        while(attempt < maxRetries && !success) {
+          let submitOrder;
+          if (data.orderType == "market") {
+            submitOrder = await prisma.order.create({
+              data: {
+                account_id: getAccountId.id,
+                stock_id: data.stockId,
+                price: 0,
+                number: data.number,
+                order_type: "market",
+                trading_type: "sell"
+              }
+            });
+          } else if (data.orderType == "limit") {
+            submitOrder = await prisma.order.create({
+              data: {
+                account_id: getAccountId.id,
+                stock_id: data.stockId,
+                price: data.price,
+                number: data.number,
+                order_type: "limit",
+                trading_type: "sell"
+              }
+            });
+          }
+          try {
+            await this.order.order(prisma, data, submitOrder, "sell");
+            success = true;
+            return;
+          } catch (error) {
+            if (error.code === 'P2034') {
+                attempt++;
+                console.log(`Retrying transaction... Attempt ${attempt}`);
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } else {
+                console.log(error)
+                throw Error("Internet server Error")
             }
-          });
-        } else if (data.orderType == "limit") {
-          submitOrder = await prisma.order.create({
-            data: {
-              account_id: getAccountId.id,
-              stock_id: data.stockId,
-              price: data.price,
-              number: data.number,
-              order_type: "limit",
-              trading_type: "sell"
-            }
-          });
+          }
         }
-        await this.order.order(prisma, data, submitOrder, "sell");
       });
       await this.websocket.stockUpdate();
     } catch (err) {

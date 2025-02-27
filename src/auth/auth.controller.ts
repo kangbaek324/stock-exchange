@@ -7,7 +7,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { GetUser } from '../common/decorator/get-user.decorator';
 import { Payload } from './interfaces/payload.interface';
 
-@Controller('auth')
+@Controller("auth")
 export class AuthController {
     constructor(private readonly authService: AuthService) {}
 

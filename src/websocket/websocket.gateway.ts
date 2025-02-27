@@ -76,6 +76,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       sellorderbookData : sellorderbookData,
       match : match
     }
+
     this.server.emit('stockUpdated', data);
   }
 }

@@ -41,6 +41,15 @@ model stocks {
   order_match  order_match[]
 }
 
+// model stocks_price_info {
+//   DateTime
+//   stock_id Int
+//   high Int
+//   low Int
+//   open Int
+//   close Int
+// }
+
 model users_stocks {
   id         Int   @id @default(autoincrement())
   account_id Int
@@ -82,6 +91,8 @@ model order {
 
   accounts accounts @relation(fields: [account_id], references: [id])
   stocks   stocks   @relation(fields: [stock_id], references: [id])
+
+  @@index([stock_id, trading_type, status, price, created_at])
   // order_match order_match[]
 }
 

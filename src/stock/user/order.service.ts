@@ -20,7 +20,7 @@ export class OrderService {
             let findOrder;
             if (tradingType == "sell") {
                 if (data.orderType == "market") {
-                        findOrder = await prisma.order.findFirst({
+                    findOrder = await prisma.order.findFirst({
                         where: {
                             stock_id: data.stockId,
                             trading_type: "buy",
@@ -59,8 +59,7 @@ export class OrderService {
                         ],
                     });
                 }
-            }
-            else {
+            } else {
                 if (data.orderType == "market") {
                     findOrder = await prisma.order.findFirst({
                         where: {
@@ -104,6 +103,7 @@ export class OrderService {
             }
 
             if (findOrder) {
+                
                 if (submitOrder.number - submitOrder.match_number == findOrder.number - findOrder.match_number) {
                     await prisma.order.update({
                         where: {
@@ -142,8 +142,7 @@ export class OrderService {
                     });
 
                     return;
-                }
-                else if (submitOrder.number - submitOrder.match_number < findOrder.number - findOrder.match_number) {
+                } else if (submitOrder.number - submitOrder.match_number < findOrder.number - findOrder.match_number) {
                     await prisma.order.update({
                         where: {
                             id: submitOrder.id
@@ -180,43 +179,41 @@ export class OrderService {
                     });
 
                     return;
-                }
-                else if (submitOrder.number - submitOrder.match_number > findOrder.number - findOrder.match_number) {
-                await prisma.order.update({
-                    where: {
-                        id: submitOrder.id
-                    },
-                    data: {
-                        match_number: submitOrder.match_number + (findOrder.number - findOrder.match_number)
-                    }
-                });
-            
-                await prisma.order.update({
-                    where: {
-                        id: findOrder.id
-                    },
-                    data: {
-                        status: "y",
-                        match_number: findOrder.number
-                    }
-                });
-            
-                await prisma.order_match.create({
-                    data: {
-                        stock_id: data.stockId,
-                        number: findOrder.number - findOrder.match_number,
-                        initial_order_id: findOrder.id,
-                        order_id: submitOrder.id
-                    }
-                });
+                } else if (submitOrder.number - submitOrder.match_number > findOrder.number - findOrder.match_number) {
+                    await prisma.order.update({
+                        where: {
+                            id: submitOrder.id
+                        },
+                        data: {
+                            match_number: submitOrder.match_number + (findOrder.number - findOrder.match_number)
+                        }
+                    });
+                
+                    await prisma.order.update({
+                        where: {
+                            id: findOrder.id
+                        },
+                        data: {
+                            status: "y",
+                            match_number: findOrder.number
+                        }
+                    });
+                
+                    await prisma.order_match.create({
+                        data: {
+                            stock_id: data.stockId,
+                            number: findOrder.number - findOrder.match_number,
+                            initial_order_id: findOrder.id,
+                            order_id: submitOrder.id
+                        }
+                    });
 
-                await prisma.stocks.update({
-                    where : { id : data.stockId },
-                    data : {
-                        price : findOrder.price
-                    }
-                });
-
+                    await prisma.stocks.update({
+                        where : { id : data.stockId },
+                        data : {
+                            price : findOrder.price
+                        }
+                    });
                 }
             } else {
                 if (submitOrder.number != submitOrder.match_number && submitOrder.order_type == "market") {

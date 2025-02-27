@@ -8,7 +8,7 @@ import { EditDto } from './dtos/edit.dto';
 import { CancellDto } from './dtos/cancell.dto';
 import { GetOrderDto } from './dtos/get-order.dto';
 
-@Controller('user/stock/orders')
+@Controller("stock/user/orders")
 @UseGuards(AuthGuard("jwt"))
 export class UserController {
   constructor(private readonly userService: UserService) {}

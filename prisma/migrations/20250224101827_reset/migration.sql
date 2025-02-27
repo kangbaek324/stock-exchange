@@ -26,12 +26,12 @@ CREATE TABLE `accounts` (
 -- CreateTable
 CREATE TABLE `stocks` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
-    `stock_name` VARCHAR(30) NOT NULL,
-    `stock_price` INTEGER NOT NULL,
+    `name` VARCHAR(30) NOT NULL,
+    `price` INTEGER NOT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `broken_at` DATETIME(3) NOT NULL,
+    `broken_at` DATETIME(3) NULL,
 
-    UNIQUE INDEX `stocks_stock_name_key`(`stock_name`),
+    UNIQUE INDEX `stocks_name_key`(`name`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -53,7 +53,9 @@ CREATE TABLE `order` (
     `stock_id` INTEGER NOT NULL,
     `price` INTEGER NOT NULL,
     `number` INTEGER NOT NULL,
+    `match_number` INTEGER NULL DEFAULT 0,
     `order_type` ENUM('limit', 'market') NOT NULL,
+    `status` ENUM('y', 'n', 'c') NULL DEFAULT 'n',
     `trading_type` ENUM('buy', 'sell') NOT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 

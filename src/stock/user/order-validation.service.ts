@@ -47,6 +47,14 @@ export class OrderValidationService {
         return errorNumber = 3;
       }
 
+      if (data.number > 10000) {
+        return errorNumber = 4;
+      }
+
+      if (data.price <= 0) {
+        return errorNumber = 5;
+      }
+
       return errorNumber = 0;
     }
 
