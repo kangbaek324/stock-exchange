@@ -110,18 +110,17 @@ export class AuthService {
                 orderBy : { created_at: "desc" },
                 select : { account_number: true }
             });
-            await this.prisma.accounts.create({
+            const response = await this.prisma.accounts.create({
                 data : {
                     user_id : user.id,
                     account_number : ++before_account_number.account_number,
                     money : 100000000
                 }
             });
-            return await this.prisma.accounts.findFirst({
-                where: { user_id: user.user_id },
-                orderBy: { created_at: "desc" },
-                select: { account_number: true }
-            });
+            return {
+                account_number : response.account_number,
+                money : response.money.toString()
+            }
         } catch (err) {
             console.log(err)
             throw new InternalServerErrorException("서버에 오류가 발생했습니다")

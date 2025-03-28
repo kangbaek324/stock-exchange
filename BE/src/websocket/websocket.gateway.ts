@@ -12,12 +12,10 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   constructor(private readonly prisma: PrismaService) {}
   @WebSocketServer() server: Server
   private logger: Logger = new Logger("websocketGateway");
-  // private clients = new Map<string, string>();
-
   afterInit(server: Server) {
     this.logger.log("웹소켓 서버 초기화")
-  }
-  
+  } 
+
   async handleConnection(client: Socket) {
     this.logger.log(`Client Connected : ${client.id}`);
     this.stockUpdate();
@@ -25,15 +23,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
   handleDisconnect(client: Socket) {
     this.logger.log(`client Disconnected : ${client.id}`);
-    // this.clients.delete(client.id);
   }
-
-  // @SubscribeMessage('joinStock')
-  // handleJoinStock(client: any, stockId: string): void {
-  //     console.log(`클라이언트가 주식에 가입함: ${stockId}`);
-  //     this.clients.set(client.id, stockId); 
-  //     client.join(stockId);
-  // }
 
   public async stockUpdate() {
     let data = {};
