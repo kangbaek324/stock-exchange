@@ -97,6 +97,8 @@ export class UserService {
       throw new BadRequestException("1만주를 초과한 주문은 불가능합니다")
     } else if (validationResultCode == 5) {
       throw new BadRequestException("0원 이하의 주문은 불가능합니다")
+    } else if (validationResultCode == 6) {
+      throw new BadRequestException("0주 이하의 주문은 불가능합니다")
     }
     try {
       await this.prisma.$transaction(async (prisma) => {
@@ -168,6 +170,8 @@ export class UserService {
       throw new BadRequestException("1만주를 초과한 주문은 불가능합니다")
     } else if (validationResultCode == 5) {
       throw new BadRequestException("0원 이하의 주문은 불가능합니다")
+    } else if (validationResultCode == 6) {
+      throw new BadRequestException("0주 이하의 주문은 불가능합니다")
     }
     try {
       //주문 등록 및 즉시 체결가능한 주문 체결

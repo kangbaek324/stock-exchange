@@ -11,7 +11,7 @@ export class SigninDto {
     username: string;
     
     @ApiProperty({
-        example: 'kangbaekho@1234#!',
+        example: 'Kangbaekho@1234#!',
         description: "password"
     })
     @IsString()

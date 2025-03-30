@@ -13,7 +13,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   @WebSocketServer() server: Server
   private logger: Logger = new Logger("websocketGateway");
   afterInit(server: Server) {
-    this.logger.log("웹소켓 서버 초기화")
+    this.logger.log("Websocket server reset")
   } 
 
   async handleConnection(client: Socket) {

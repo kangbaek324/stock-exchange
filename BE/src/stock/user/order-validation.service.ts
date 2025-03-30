@@ -55,6 +55,10 @@ export class OrderValidationService {
         return errorNumber = 5;
       }
 
+      if (data.number <= 0) {
+        return errorNumber =  6;
+      }
+
       return errorNumber = 0;
     }
 

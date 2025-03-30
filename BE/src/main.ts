@@ -7,7 +7,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 dotenv.config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -15,7 +17,6 @@ async function bootstrap() {
       transform: true,
     }),
   );
-
   const config = new DocumentBuilder()
     .setTitle('orderbook')
     .setDescription('한국거래소 호가창을 기반으로 한 호가창 구현')

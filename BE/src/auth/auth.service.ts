@@ -21,6 +21,12 @@ export class AuthService {
      * @description "회원가입 함수"
      */
     async signup(signupData: SignupDto): Promise<void> {
+        if (await this.checkUsernameDuplicate(signupData.username)) {
+            throw new BadRequestException("이미 사용중인 이름입니다");
+        }
+        if (await this.checkEmailDuplicate(signupData.email)) {
+            throw new BadRequestException("이미 사용중인 이메일입니다");
+        }
         try {
             const password = await bcrypt.hash(signupData.password, salt)
             await this.prisma.users.create({ 
