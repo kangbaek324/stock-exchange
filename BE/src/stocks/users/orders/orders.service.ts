@@ -1,28 +1,28 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from 'src/common/prisma/prisma.service';
 import { BuyDto } from './dtos/buy.dto';
 import { SellDto } from './dtos/sell.dto';
-import { CancellDto } from './dtos/cancell.dto';
-import { OrderValidationService } from './order-validation.service';
-import { OrderService } from './order.service';
+import { CancelDto } from './dtos/cancel.dto';
+import { OrdersValidationService } from './orders-validation.service';
+import { OrdersLogicService } from './orders-logic.service';
 import { GetOrderDto } from './dtos/get-order.dto';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
+import { EditDto } from './dtos/edit.dto';
+import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class UserService {
+export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly orderValidation: OrderValidationService,
-    private readonly order: OrderService,
+    private readonly ordersValidation: OrdersValidationService,
+    private readonly ordersLogic: OrdersLogicService,
     private readonly websocket: WebsocketGateway
   ) {}
 
   async getOrder(query: GetOrderDto, user) {
-    const validationResultCode = await this.orderValidation.getOrderValidate(query, user)
-    if (validationResultCode == 1) {
-      throw new BadRequestException("잘못된 계좌번호입니다")
-    } else if (validationResultCode == 2) {
-      throw new BadRequestException("올바르지 않은 계좌번호입니다")
+    const resultMessage = await this.ordersValidation.getOrderValidate(query, user)
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage);
     }
 
     try {
@@ -34,7 +34,7 @@ export class UserService {
           id : true
         }
       });
-
+      
       if (query.status) {
         if (query.status == "matched") {
           return await this.prisma.order.findMany({
@@ -80,29 +80,19 @@ export class UserService {
         });
       }
     } catch(err) {
-      console.log(err)
+      console.log(err);
       throw new BadRequestException("서버에 오류가 발생했습니다");
     }
   }
 
   async buy(data: BuyDto, user) {
-    const validationResultCode = await this.orderValidation.buySellValidate(data, user);
-    if (validationResultCode == 1) {
-      throw new BadRequestException("잘못된 계좌번호입니다")
-    } else if (validationResultCode == 2) {
-      throw new BadRequestException("올바르지 않은 계좌번호입니다")
-    } else if (validationResultCode == 3) {
-      throw new BadRequestException("잘못된 stock_id입니다")
-    } else if (validationResultCode == 4) {
-      throw new BadRequestException("1만주를 초과한 주문은 불가능합니다")
-    } else if (validationResultCode == 5) {
-      throw new BadRequestException("0원 이하의 주문은 불가능합니다")
-    } else if (validationResultCode == 6) {
-      throw new BadRequestException("0주 이하의 주문은 불가능합니다")
+    const resultMessage = await this.ordersValidation.buySellValidate(data, user, "buy");
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage)
     }
     try {
-      await this.prisma.$transaction(async (prisma) => {
-        const maxRetries = 5; // 최대 재시도 횟수
+      await this.prisma.$transaction(async (prisma: PrismaClient) => {
+        const maxRetries = 5;
         let attempt = 0;
         let success = false;
         const getAccountId = await this.prisma.accounts.findUnique({
@@ -135,7 +125,7 @@ export class UserService {
             });
           }
           try {
-            await this.order.order(prisma, data, submitOrder, "buy");
+            await this.ordersLogic.order(prisma, data, submitOrder, "buy");
             success = true;
             return;
           } catch (error) {
@@ -157,26 +147,14 @@ export class UserService {
     }
   }
 
-
   async sell(data: SellDto, user) {
-    const validationResultCode = await this.orderValidation.buySellValidate(data, user);
-    if (validationResultCode == 1) {
-      throw new BadRequestException("잘못된 계좌번호입니다")
-    } else if (validationResultCode == 2) {
-      throw new BadRequestException("올바르지 않은 계좌번호입니다")
-    } else if (validationResultCode == 3) {
-      throw new BadRequestException("잘못된 stock_id입니다")
-    } else if (validationResultCode == 4) {
-      throw new BadRequestException("1만주를 초과한 주문은 불가능합니다")
-    } else if (validationResultCode == 5) {
-      throw new BadRequestException("0원 이하의 주문은 불가능합니다")
-    } else if (validationResultCode == 6) {
-      throw new BadRequestException("0주 이하의 주문은 불가능합니다")
+    const resultMessage = await this.ordersValidation.buySellValidate(data, user, "sell");
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage)
     }
     try {
-      //주문 등록 및 즉시 체결가능한 주문 체결
-      await this.prisma.$transaction(async (prisma) => {
-        const maxRetries = 5; // 최대 재시도 횟수
+      await this.prisma.$transaction(async (prisma: PrismaClient) => {
+        const maxRetries = 5;
         let attempt = 0;
         let success = false;
         const getAccountId = await this.prisma.accounts.findUnique({
@@ -208,8 +186,9 @@ export class UserService {
               }
             });
           }
+
           try {
-            await this.order.order(prisma, data, submitOrder, "sell");
+            await this.ordersLogic.order(prisma, data, submitOrder, "sell");
             success = true;
             return;
           } catch (error) {
@@ -231,22 +210,31 @@ export class UserService {
     }
   }
 
-  async edit(data, user) {
-
+  async edit(data: EditDto, user) {
+    const resultMessage = await this.ordersValidation.editValidate(data, user);
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage);
+    }
+    try {
+      await this.prisma.order.update({
+        data : {
+          price : data.price
+        },
+        where : {
+          id : data.orderId
+        }
+      });
+      await this.websocket.stockUpdate();
+    } catch(err) {
+      console.log(err)
+      throw new InternalServerErrorException("서버에 오류가 발생했습니다")
+    }
   }
 
-  async cancell(data: CancellDto, user) {
-    const validationResultCode = await this.orderValidation.cancellValidate(data, user);
-    if (validationResultCode == 1) {
-      throw new BadRequestException("잘못된 계좌번호입니다")
-    } else if (validationResultCode == 2) {
-      throw new BadRequestException("올바르지 않은 계좌번호입니다")
-    } else if (validationResultCode == 3) {
-      throw new BadRequestException("잘못된 order_id 입니다")
-    } else if (validationResultCode == 4) {
-      throw new BadRequestException("올바르지 않은 order_id 입니다")
-    } else if (validationResultCode == 5) {
-      throw new BadRequestException("이미 취소된 주문 입니다")
+  async cancel(data: CancelDto, user) {
+    const resultMessage = await this.ordersValidation.cancelValidate(data, user);
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage);
     }
     try {
       await this.prisma.order.update({

@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from 'src/common/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { SigninDto } from './dtos/signin.dto';
 import { SignupDto } from './dtos/signup.dto';
 import { JwtService } from '@nestjs/jwt';
 import { Payload } from './interfaces/payload.interface';
-import { Jwt } from './interfaces/jwt.interface';
+import { AuthRepository } from './repositories/auth.repository';
 
 const salt = 10;
 
@@ -13,13 +13,10 @@ const salt = 10;
 export class AuthService {
     constructor(
         private readonly prisma: PrismaService,
+        private readonly authRepository: AuthRepository,
         private readonly jwtService: JwtService
     ) {}
 
-    /**
-     * @param SignupDto
-     * @description "회원가입 함수"
-     */
     async signup(signupData: SignupDto): Promise<void> {
         if (await this.checkUsernameDuplicate(signupData.username)) {
             throw new BadRequestException("이미 사용중인 이름입니다");
@@ -29,24 +26,13 @@ export class AuthService {
         }
         try {
             const password = await bcrypt.hash(signupData.password, salt)
-            await this.prisma.users.create({ 
-                data : {
-                    username : signupData.username,
-                    password : password,
-                    email : signupData.email
-                }
-            });
+            this.authRepository.createUser(signupData, password);
         } catch (err) {
             console.log(err)
             throw new InternalServerErrorException();
         }
     }
 
-    /**
-     * @param username 
-     * @description "username 중복 체크 함수"
-     * @returns "중복이 있을경우 true 없을경우 false를 반환함"
-     */
     async checkUsernameDuplicate(username: string): Promise<Boolean> {
         try {
             const result = await this.prisma.users.findUnique({
@@ -59,11 +45,6 @@ export class AuthService {
         }
     }
 
-    /**
-     * @param email 
-     * @description "이메일 중복 체크 함수"
-     * @returns "중복이 있을경우 true 없을경우 false를 반환함"
-     */
     async checkEmailDuplicate(email: string): Promise<Boolean> {
         try {
             const result = await this.prisma.users.findUnique({
@@ -76,11 +57,7 @@ export class AuthService {
         }
     }
 
-    /**
-     * @param SigninDto
-     * @returns "로그인 함수"
-     */
-    async signin(signinData: SigninDto): Promise<Jwt> {
+    async signin(signinData: SigninDto): Promise<unknown> {
         let findUser;
         try {
             findUser = await this.prisma.users.findUnique({
@@ -95,7 +72,7 @@ export class AuthService {
             const match = await bcrypt.compare(signinData.password, findUser.password)
             if (match) {
                 const payload: Payload = { userId: findUser.id, username: signinData.username }
-                const jwt: Jwt = { accessToken : this.jwtService.sign(payload) };
+                const jwt = { accessToken : this.jwtService.sign(payload) };
                 return jwt
             } else {
                 throw new BadRequestException("아이디 또는 비밀번호가 잘못되었습니다");
@@ -104,13 +81,8 @@ export class AuthService {
             throw new BadRequestException("아이디 또는 비밀번호가 잘못되었습니다,");
         }
     }
-
-    /**
-     * @param  user
-     * @returns "계좌개설 함수"
-     */
-    //동시요청 예외 처리하기
-    async createAccount(user) {
+    
+    async createAccount(user): Promise<unknown> {
         try {
             const before_account_number = await this.prisma.accounts.findFirst({
                 orderBy : { created_at: "desc" },
@@ -118,7 +90,7 @@ export class AuthService {
             });
             const response = await this.prisma.accounts.create({
                 data : {
-                    user_id : user.id,
+                    user_id : user,
                     account_number : ++before_account_number.account_number,
                     money : 100000000
                 }

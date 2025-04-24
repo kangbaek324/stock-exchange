@@ -2,7 +2,6 @@ import { Body, Controller, Post, Res, UseGuards, UseInterceptors } from '@nestjs
 import { SignupDto } from './dtos/signup.dto';
 import { SigninDto } from './dtos/signin.dto';
 import { AuthService } from './auth.service';
-import { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { GetUser } from '../common/decorator/get-user.decorator';
 import { Payload } from './interfaces/payload.interface';
@@ -19,8 +18,8 @@ export class AuthController {
     @ApiOperation({ summary: "회원가입" })
     @ApiResponse({ status: "2XX", description: ""})
     @Post("/sign-up")
-    async signup(@Body() signupData: SignupDto): Promise<void> {
-        return this.authService.signup(signupData);
+    async signup(@Body() data: SignupDto): Promise<void> {
+        return this.authService.signup(data);
     }
 
     @ApiOperation({ summary: "로그인" })
@@ -31,8 +30,8 @@ export class AuthController {
     `})
     @Post("/sign-in")
     @UseInterceptors(jwtInterceptor)
-    async signin(@Body() signinData: SigninDto, @Res() res: Response): Promise<any> {
-        return this.authService.signin(signinData)
+    async signin(@Body() data: SigninDto): Promise<unknown> {
+        return this.authService.signin(data)
     }
 
     @ApiOperation({ summary: "계좌개설" })
@@ -45,7 +44,7 @@ export class AuthController {
     `})
     @Post("/account/create")
     @UseGuards(AuthGuard("jwt"))
-    async accountCreate(@GetUser() user: Payload) {
+    async accountCreate(@GetUser() user: Payload): Promise<unknown> {
         return this.authService.createAccount(user);
     }
 }

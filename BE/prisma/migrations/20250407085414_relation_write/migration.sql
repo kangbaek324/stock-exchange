@@ -36,11 +36,12 @@ CREATE TABLE `stocks` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `users_stocks` (
+CREATE TABLE `user_stocks` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `account_id` INTEGER NOT NULL,
     `stock_id` INTEGER NOT NULL,
     `number` INTEGER NOT NULL,
+    `can_number` INTEGER NOT NULL,
     `average` DOUBLE NOT NULL,
 
     PRIMARY KEY (`id`)
@@ -78,10 +79,10 @@ CREATE TABLE `order_match` (
 ALTER TABLE `accounts` ADD CONSTRAINT `accounts_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `users_stocks` ADD CONSTRAINT `users_stocks_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `user_stocks` ADD CONSTRAINT `user_stocks_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`account_number`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `users_stocks` ADD CONSTRAINT `users_stocks_stock_id_fkey` FOREIGN KEY (`stock_id`) REFERENCES `stocks`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `user_stocks` ADD CONSTRAINT `user_stocks_stock_id_fkey` FOREIGN KEY (`stock_id`) REFERENCES `stocks`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `order` ADD CONSTRAINT `order_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -91,3 +92,9 @@ ALTER TABLE `order` ADD CONSTRAINT `order_stock_id_fkey` FOREIGN KEY (`stock_id`
 
 -- AddForeignKey
 ALTER TABLE `order_match` ADD CONSTRAINT `order_match_stock_id_fkey` FOREIGN KEY (`stock_id`) REFERENCES `stocks`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `order_match` ADD CONSTRAINT `order_match_initial_order_id_fkey` FOREIGN KEY (`initial_order_id`) REFERENCES `order`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `order_match` ADD CONSTRAINT `order_match_order_id_fkey` FOREIGN KEY (`order_id`) REFERENCES `order`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

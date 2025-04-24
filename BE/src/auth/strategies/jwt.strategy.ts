@@ -1,15 +1,17 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
-import { PrismaService } from "src/prisma/prisma.service";
+import { PrismaService } from "src/common/prisma/prisma.service";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
     constructor (
-        private readonly prismaService: PrismaService
+        private readonly prismaService: PrismaService,
+        private readonly configService: ConfigService
     ) {
         super({
-            secretOrKey: "orderbook",
+            secretOrKey: configService.get<string>("JWT_SECRET"),
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken()
         })
     }
@@ -19,12 +21,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         const result = await this.prismaService.users.findUnique({
             where : {
                 id : userId
+            },
+            select : {
+                id : true,
+                username : true
             }
         })
         if (!result) {
             throw new UnauthorizedException();
         }
-
         return result;
     }
 }

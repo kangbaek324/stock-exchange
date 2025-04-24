@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from 'src/common/prisma/prisma.service';
 
 // StockId 1로 하드코딩 되어있음
 @WebSocketGateway(3001, {
@@ -14,7 +14,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   private logger: Logger = new Logger("websocketGateway");
   afterInit(server: Server) {
     this.logger.log("Websocket server reset")
-  } 
+  }
 
   async handleConnection(client: Socket) {
     this.logger.log(`Client Connected : ${client.id}`);
