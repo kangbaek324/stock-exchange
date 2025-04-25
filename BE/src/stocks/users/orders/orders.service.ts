@@ -237,7 +237,7 @@ export class OrdersService {
       throw new BadRequestException(resultMessage);
     }
     try {
-      await this.prisma.order.update({
+      const order = await this.prisma.order.update({
         data : {
           status : "c"
         },
@@ -245,6 +245,28 @@ export class OrdersService {
           id : data.orderId
         }
       });
+      
+      if (order.trading_type = "sell") {
+        const userStock = await this.prisma.user_stocks.findFirst({
+          where :{
+            stock_id : order.stock_id,
+            account_id : order.account_id
+          }
+        })
+
+        await this.prisma.user_stocks.update({
+          where : {
+            id : userStock.id
+          },
+          data : {
+            can_number : userStock.can_number + (order.number - order.match_number) 
+          }
+        });
+      }
+      else {
+        console.log("money");
+      }
+
       await this.websocket.stockUpdate();
     } catch(err) {
       console.log(err)

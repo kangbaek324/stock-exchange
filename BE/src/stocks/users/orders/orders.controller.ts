@@ -89,14 +89,14 @@ export class OrdersController {
 
   @ApiOperation({ summary: "주식 주문 정정" })
   @ApiBearerAuth("access-token")
-  @Put("/edit")
+  @Put("/")
   async edit(@Body() data: EditDto, @GetUser() user): Promise<void> {
     return this.OrdersService.edit(data, user);
   } 
 
   @ApiOperation({ summary: "주식 주문 취소" })
   @ApiBearerAuth("access-token")
-  @Delete("/cancel")
+  @Delete("/")
   async cancel(@Body() data: CancelDto , @GetUser() user): Promise<void> {
     return this.OrdersService.cancel(data, user);
   }

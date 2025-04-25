@@ -90,7 +90,7 @@ export class AuthService {
             });
             const response = await this.prisma.accounts.create({
                 data : {
-                    user_id : user,
+                    user_id : user.id,
                     account_number : ++before_account_number.account_number,
                     money : 100000000
                 }

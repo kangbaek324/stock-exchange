@@ -42,7 +42,7 @@ export class AuthController {
             "money": "100000000"
         }
     `})
-    @Post("/account/create")
+    @Post("/account")
     @UseGuards(AuthGuard("jwt"))
     async accountCreate(@GetUser() user: Payload): Promise<unknown> {
         return this.authService.createAccount(user);
