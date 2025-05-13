@@ -12,6 +12,7 @@ import { LoggerMiddleware } from './middlewares/logger.middleware';
     AuthModule, PrismaModule, StockModule, WebsocketModule,
   ],
 })
+
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(LoggerMiddleware).forRoutes('*');

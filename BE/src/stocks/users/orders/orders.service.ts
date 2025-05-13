@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { BuyDto } from './dtos/buy.dto';
 import { SellDto } from './dtos/sell.dto';
@@ -9,15 +9,41 @@ import { GetOrderDto } from './dtos/get-order.dto';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { EditDto } from './dtos/edit.dto';
 import { PrismaClient } from '@prisma/client';
+import { ClientProxy } from '@nestjs/microservices';
 
 @Injectable()
 export class OrdersService {
   constructor(
+    @Inject("ORDER_SERVICE") private client: ClientProxy,
     private readonly prisma: PrismaService,
     private readonly ordersValidation: OrdersValidationService,
     private readonly ordersExecution: OrdersExecutionService,
     private readonly websocket: WebsocketGateway
   ) {}
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async sendMQ(
+    data: BuyDto | SellDto | CancelDto | EditDto,
+    user,
+    type: "buy" | "sell" | "cancell" | "edit"
+  ) {
+    const mqData = {
+      data: {
+        data,
+        user
+      },
+      type: type
+    }
+
+    this.client.emit("order", mqData);
+  }
+
+  async sendOrder(mqData) {
+    console.log("ads");
+  }
 
   async getOrder(query: GetOrderDto, user) {
     const resultMessage = await this.ordersValidation.getOrderValidate(query, user)

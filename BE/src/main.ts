@@ -2,9 +2,24 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+      options: {
+        urls: ['amqp://localhost:5672'],
+        queue: 'orders',
+        queueOptions: {
+          durable: true,
+        },
+        prefetchCount: 1,
+        noAck: false
+      },
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -12,6 +27,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
   const config = new DocumentBuilder()
     .setTitle('orderbook')
     .setDescription('한국거래소 호가창을 기반으로 한 호가창 구현')
@@ -30,6 +46,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
+  await app.startAllMicroservices();
   await app.listen(3000);
 }
 bootstrap();

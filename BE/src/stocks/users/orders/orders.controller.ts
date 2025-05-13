@@ -8,6 +8,8 @@ import { EditDto } from './dtos/edit.dto';
 import { CancelDto } from './dtos/cancel.dto';
 import { GetOrderDto } from './dtos/get-order.dto';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
+import { channel } from 'diagnostics_channel';
 
 @ApiTags("stock")
 @Controller("stock/user/orders")
@@ -57,32 +59,45 @@ export class OrdersController {
   async getOrder(@Query() query: GetOrderDto, @GetUser() user) {
     return this.OrdersService.getOrder(query, user);
   }
+
+  @EventPattern("order")
+  async sendOrder(@Payload() mqData: any, @Ctx() context: RmqContext) {
+    const channel = context.getChannelRef();
+    const originalMsg = context.getMessage();
+
+    await this.OrdersService.sendOrder(mqData);
+    channel.ack(originalMsg);
+  }
   
   @ApiOperation({ summary: "주식 매수" })
   @ApiBearerAuth("access-token")
   @Post("/buy")
   async buy(@Body() data: BuyDto, @GetUser() user): Promise<void> {
-    return this.OrdersService.buy(data, user);
+    return this.OrdersService.sendMQ(data, user, "buy");
+    // return this.OrdersService.buy(data, user);
   }
 
   @ApiOperation({ summary: "주식 매도" })
   @ApiBearerAuth("access-token")
   @Post("/sell")
   async sell(@Body() data: SellDto, @GetUser() user): Promise<void> {
-    return this.OrdersService.sell(data, user)
+    return this.OrdersService.sendMQ(data, user, "sell");
+    // return this.OrdersService.sell(data, user)
   }
 
   @ApiOperation({ summary: "주식 주문 정정" })
   @ApiBearerAuth("access-token")
   @Put("/")
   async edit(@Body() data: EditDto, @GetUser() user): Promise<void> {
-    return this.OrdersService.edit(data, user);
+    return this.OrdersService.sendMQ(data, user, "edit");
+    // return this.OrdersService.edit(data, user);
   } 
 
   @ApiOperation({ summary: "주식 주문 취소" })
   @ApiBearerAuth("access-token")
   @Delete("/")
   async cancel(@Body() data: CancelDto , @GetUser() user): Promise<void> {
-    return this.OrdersService.cancel(data, user);
+    return this.OrdersService.sendMQ(data, user, "cancell");
+    // return this.OrdersService.cancel(data, user);
   }
 }
