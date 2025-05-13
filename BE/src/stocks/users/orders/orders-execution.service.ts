@@ -8,13 +8,13 @@ import * as utils from "./utils/orders.util";
  * 주식 매수, 매도 로직
  */
 @Injectable()
-export class OrdersLogicService {
+export class OrdersExecutionService {
     async order(
         prisma: PrismaClient, 
         data: BuyDto | SellDto, 
         submitOrder, 
         tradingType
-    ): Promise<void> 
+    ): Promise<boolean> 
     {
         while (true) {
             let findOrder;
@@ -30,7 +30,7 @@ export class OrdersLogicService {
                     const order = [findOrder, submitOrder]
                     // 잔고 수정
                     if (tradingType == "buy") {
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             submitOrder.account_id, 
@@ -40,7 +40,7 @@ export class OrdersLogicService {
                             findOrder.price,
                         );
                         
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             findOrder.account_id, 
@@ -49,7 +49,7 @@ export class OrdersLogicService {
                             true
                         );
                     } else {
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             submitOrder.account_id,
@@ -58,7 +58,7 @@ export class OrdersLogicService {
                             false
                         );
                         
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             findOrder.account_id, 
@@ -69,16 +69,16 @@ export class OrdersLogicService {
                         );
                     }
                     await utils.orderCompleteUpdate(prisma, order); 
-                    // 돈 증감 / 차감 
                     await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 1);
                     await utils.stockPriceUpdate(prisma, data, findOrder.price);
-                    return;
+
+                    break;
                 }
                 else if (submitOrderNumber < findOrderNumber) {
-                    const order = [submitOrder]
+                    const order = [submitOrder];
                     // 잔고 수정
                     if (tradingType == "buy") {
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             submitOrder.account_id, 
@@ -88,7 +88,7 @@ export class OrdersLogicService {
                             findOrder.price,
                         );
                         
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             findOrder.account_id, 
@@ -97,7 +97,7 @@ export class OrdersLogicService {
                             true
                         );
                     } else {
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             submitOrder.account_id,
@@ -106,7 +106,7 @@ export class OrdersLogicService {
                             false
                         );
                         
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             findOrder.account_id, 
@@ -118,16 +118,16 @@ export class OrdersLogicService {
                     }
                     await utils.orderCompleteUpdate(prisma, order, submitOrder.number);
                     await utils.orderMatchAndRemainderUpdate(prisma, findOrder, submitOrder);
-                    // 돈 증감 / 차감
                     await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 2)
                     await utils.stockPriceUpdate(prisma, data, findOrder.price);
-                    return;
+
+                    break;
                 }
                 else if (submitOrderNumber > findOrderNumber) {
                     const order = [findOrder]
                     // 잔고 수정
                     if (tradingType == "buy") {
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             submitOrder.account_id, 
@@ -137,7 +137,7 @@ export class OrdersLogicService {
                             findOrder.price,
                         );
                         
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             findOrder.account_id, 
@@ -146,7 +146,7 @@ export class OrdersLogicService {
                             true
                         );
                     } else {
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             submitOrder.account_id,
@@ -155,7 +155,7 @@ export class OrdersLogicService {
                             false
                         );
                         
-                        await utils.accountStockUpdate(
+                        await utils.accountUpdate(
                             prisma, 
                             data.stockId, 
                             findOrder.account_id, 
@@ -167,17 +167,18 @@ export class OrdersLogicService {
                     }
                     await utils.orderCompleteUpdate(prisma, order, findOrder.number);
                     await utils.orderMatchAndRemainderUpdate(prisma, submitOrder, findOrder)
-                    // 돈 증감 / 차감
                     await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 3)
                     await utils.stockPriceUpdate(prisma, data, findOrder.price);
                 }
-            } else {
+            } 
+            else {
                 // 더이상 체결할 주문이 없거나 / 즉시 체결가능한 주문이 없는경우
                 // 시장가인데 모두 체결 되지 않은 경우 (현재 가격 지정가로 등록)
                 const userStocks = await prisma.user_stocks.findFirst({
                     where : { account_id : submitOrder.account_id, stock_id : data.stockId }
                 });
                 
+                // 매도주문 -> 체결할 주문이 없음
                 if (tradingType == "sell") {
                     await prisma.user_stocks.update({
                         where : { id : userStocks.id },
@@ -187,18 +188,22 @@ export class OrdersLogicService {
                     });
                 }
 
+                // 시장가 주문 -> 일부체결시 지정가로 전환
                 if (submitOrder.number != submitOrder.match_number && submitOrder.order_type == "market") {
                     const stockPriceNow = await prisma.stocks.findUnique({
                         where : { id : submitOrder.stock_id },
                         select : { price : true }
                     }); 
+
                     await prisma.order.update({
                         where : { id : submitOrder.id },
                         data : { price : stockPriceNow.price }
                     });
                 }
-                return;
+
+                break;
             }
         }
+        return true;
     }
 }

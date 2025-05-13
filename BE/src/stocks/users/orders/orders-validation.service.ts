@@ -5,15 +5,38 @@ import { SellDto } from "./dtos/sell.dto";
 import { EditDto } from "./dtos/edit.dto";
 import { CancelDto } from "./dtos/cancel.dto";
 
-/**
- * OrderService에서 사용되는 예외 필터
- */
 @Injectable()
 export class OrdersValidationService {
     constructor(private readonly prisma : PrismaService) {}
 
-    private accountCheck(data) {
-      return this.prisma.accounts.findUnique({
+    private tickSizeCheck(price) {
+      let check = false;
+      if (price >= 2000 && price < 5000) {
+        if (price % 5 !== 0) check = true
+      } 
+      else if (price >= 5000 && price < 20000) {
+        if (price % 10 !== 0) check = true
+      } 
+      else if (price >= 20000 && price < 500000) {
+        if (price % 50 !== 0) check = true
+      } 
+      else if (price >= 50000 && price < 200000) {
+        if (price % 100 !== 0) check = true
+      } 
+      else if (price >= 200000 && price < 500000) {
+        if (price % 500 !== 0) check = true
+      } 
+      else if (price >= 500000) {
+        if (price % 1000 !== 0) check = true
+      }
+
+      if (check) {
+        return "잘못된 호가 단위 입니다";
+      }
+    }
+  
+    async accountCheck(data) {
+      return await this.prisma.accounts.findUnique({
         where: { account_number: data.accountNumber },
         select : { 
           user_id : true,
@@ -33,6 +56,10 @@ export class OrdersValidationService {
     }
 
     async buySellValidate(data : BuyDto | SellDto, user, tradingType) {
+      let tickSizeCheck = await this.tickSizeCheck(data.price);
+      if (tickSizeCheck) {
+        return tickSizeCheck;
+      }
       const accountCheck = await this.accountCheck(data);
       if (!accountCheck) {
         return "존재하지 않는 계좌번호입니다";
@@ -53,7 +80,7 @@ export class OrdersValidationService {
 
       if (tradingType == "buy") {
         if (accountCheck.money < BigInt(data.price * data.number)) {
-          return "돈이 부족합니다";
+          // return "돈이 부족합니다";
         }
       }
       else {        
@@ -68,6 +95,10 @@ export class OrdersValidationService {
     }
 
     async editValidate(data : EditDto, user) {
+      let tickSizeCheck = await this.tickSizeCheck(data.price);
+      if (tickSizeCheck) {
+        return tickSizeCheck;
+      }
       const accountCheck = await this.accountCheck(data);
       if (!accountCheck) {
         return "존재하지 않는 계좌번호입니다";

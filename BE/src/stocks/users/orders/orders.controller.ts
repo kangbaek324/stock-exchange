@@ -49,21 +49,6 @@ export class OrdersController {
           "stocks": {
             "name": "Nest소프트"
           }
-        },
-        {
-          "id": 184222,
-          "account_id": 12,
-          "stock_id": 1,
-          "price": 0,
-          "number": 5,
-          "match_number": 5,
-          "order_type": "market",
-          "status": "y",
-          "trading_type": "buy",
-          "created_at": "2025-03-28T11:53:40.569Z",
-          "stocks": {
-            "name": "Nest소프트"
-          }
         }
     ]
     `

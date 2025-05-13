@@ -5,7 +5,6 @@ import { SigninDto } from './dtos/signin.dto';
 import { SignupDto } from './dtos/signup.dto';
 import { JwtService } from '@nestjs/jwt';
 import { Payload } from './interfaces/payload.interface';
-import { AuthRepository } from './repositories/auth.repository';
 
 const salt = 10;
 
@@ -13,7 +12,6 @@ const salt = 10;
 export class AuthService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly authRepository: AuthRepository,
         private readonly jwtService: JwtService
     ) {}
 
@@ -26,7 +24,13 @@ export class AuthService {
         }
         try {
             const password = await bcrypt.hash(signupData.password, salt)
-            this.authRepository.createUser(signupData, password);
+            await this.prisma.users.create({ 
+                data : {
+                    username : signupData.username,
+                    password : password,
+                    email : signupData.email
+                }
+            });
         } catch (err) {
             console.log(err)
             throw new InternalServerErrorException();

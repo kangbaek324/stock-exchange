@@ -1,5 +1,4 @@
 import { order, PrismaClient } from "@prisma/client";
-import { Order } from "../interfaces/order.interface";
 
 /**
  * 주문제출
@@ -9,120 +8,52 @@ export async function submitOrder(prisma, submitOrder) {
         where : { id: submitOrder.id },
     });
 }
+
 /**
  * 체결할 주문 조회
  */
-export async function findOrder(prisma, data, tradingType, ) {
-    if (tradingType == "sell") {
-        if (data.orderType == "market") {
-            return prisma.order.findFirst({
-                where: {
-                    stock_id: data.stockId,
-                    trading_type: "buy",
-                    status: "n",
-                },
-                select : {
-                    id : true,
-                    account_id : true,
-                    price : true,
-                    number : true,
-                    match_number : true
-                },
-                orderBy: [
-                    { price: "desc" },
-                    { created_at: "asc" },
-                ]
-            });
+export async function findOrder(prisma, data, tradingType) {
+    const stockId = data.stockId;
+    const orderType = data.orderType;
+    const price = data.price;
+
+    let sql = `
+        SELECT id, account_id, price, number, match_number
+        FROM \`order\`
+        WHERE stock_id = ? AND trading_type = ? AND status = 'n'
+    `;
+
+    const params = [stockId];
+
+    if (tradingType === "sell") {
+        params.push("buy");
+        if (orderType === "limit") {
+            sql += ` AND price >= ?`;
+            params.push(price);
         }
-        else if (data.orderType == "limit") {
-            return prisma.order.findFirst({
-                where: {
-                    stock_id: data.stockId,
-                    trading_type: "buy",
-                    status: "n",
-                    price: {
-                        gte: data.price,
-                    },
-                },
-                select : {
-                    id : true,
-                    account_id : true,
-                    price : true,
-                    number : true,
-                    match_number : true
-                },
-                orderBy: [
-                    { price: "desc" },
-                    { created_at: "asc" },
-                ],
-            });
+        sql += ` ORDER BY price DESC, created_at ASC LIMIT 1 FOR UPDATE`;
+    } 
+    else if (tradingType === "buy") {
+        params.push("sell");
+        if (orderType === "limit") {
+            sql += ` AND price <= ?`;
+            params.push(price);
         }
-    } else if (tradingType == "buy") {
-        if (data.orderType == "market") {
-            return prisma.order.findFirst({
-                where: {
-                    stock_id: data.stockId,
-                    trading_type: "sell",
-                    status: "n",
-                },
-                select : {
-                    id : true,
-                    account_id : true,
-                    price : true,
-                    number : true,
-                    match_number : true
-                },
-                orderBy: [
-                    { price: "asc" },
-                    { created_at: "asc" },
-                ],
-            });
-        } else if (data.orderType == "limit") {
-            return prisma.order.findFirst({
-                where: {
-                    stock_id: data.stockId,
-                    trading_type: "sell",
-                    status: "n",
-                    price: {
-                        lte: data.price,
-                    }
-                },
-                select : {
-                    id : true,
-                    account_id : true,
-                    price : true,
-                    number : true,
-                    match_number : true
-                },
-                orderBy: [
-                    { price: "asc" },
-                    { created_at: "asc" },
-                ],
-            });
-        }
+        sql += ` ORDER BY price ASC, created_at ASC LIMIT 1 FOR UPDATE`;
     }
-}
+
+    const [order] = await prisma.$queryRawUnsafe(sql, ...params);
+    return order ?? null;
+}  
+
 
 /**
- * 계좌에 있는 돈 증감 / 차감
- */
-export async function accountMoneyUpdate() {
-
-}
-
-/**
- * 계좌에 있는 주식 업데이트
+ * 계좌 업데이트
  * 
- * 매수시 수량 / 평단가 업데이트 
- * 매도시 수량 업데이트
+ * 보유 수량, 돈 
  * 
  */
-
-/**
- * 경우의 수
- * 
- */
-export async function accountStockUpdate(
+export async function accountUpdate(
     prisma: PrismaClient,
     stock_id: number,
     account_id: number,
@@ -205,7 +136,7 @@ export async function orderMatchAndRemainderUpdate(prisma, remainderOrder, compl
  * 배열의 크기는 최소1개 최대 2개
  * 주문이 한가지일 경우에는 number에 업데이트될 수량을 매게변수로 받음
  */
-export async function orderCompleteUpdate(prisma, orders: Order[], number?: number) {
+export async function orderCompleteUpdate(prisma, orders, number?: number) {
     if (orders.length == 2) {
         for(let i = 0; i < orders.length; i++) {
             await prisma.order.update({

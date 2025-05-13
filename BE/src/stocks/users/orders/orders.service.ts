@@ -4,7 +4,7 @@ import { BuyDto } from './dtos/buy.dto';
 import { SellDto } from './dtos/sell.dto';
 import { CancelDto } from './dtos/cancel.dto';
 import { OrdersValidationService } from './orders-validation.service';
-import { OrdersLogicService } from './orders-logic.service';
+import { OrdersExecutionService } from './orders-execution.service';
 import { GetOrderDto } from './dtos/get-order.dto';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { EditDto } from './dtos/edit.dto';
@@ -15,7 +15,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersValidation: OrdersValidationService,
-    private readonly ordersLogic: OrdersLogicService,
+    private readonly ordersExecution: OrdersExecutionService,
     private readonly websocket: WebsocketGateway
   ) {}
 
@@ -50,7 +50,8 @@ export class OrdersService {
               }
             }
           });
-        } else {
+        }
+        else {
           return await this.prisma.order.findMany({
             where : {
               account_id : accountId.id,
@@ -65,7 +66,8 @@ export class OrdersService {
             }
           });
         }
-      } else {
+      }
+      else {
         return await this.prisma.order.findMany({
           where : {
             account_id : accountId.id
@@ -86,25 +88,28 @@ export class OrdersService {
   }
 
   async buy(data: BuyDto, user) {
-    const resultMessage = await this.ordersValidation.buySellValidate(data, user, "buy");
-    if (resultMessage) {
-      throw new BadRequestException(resultMessage)
-    }
     try {
       await this.prisma.$transaction(async (prisma: PrismaClient) => {
+        
+        const resultMessage = await this.ordersValidation.buySellValidate(data, user, "buy");
+        if (resultMessage) {
+          throw new BadRequestException(resultMessage);
+        }
+
+        const account: { user_id: number, id: number, money: number } =
+        await prisma.$queryRaw`SELECT user_id, id, money FROM accounts WHERE account_number = ${data.accountNumber}`
+        await prisma.$queryRaw`SELECT * FROM user_stocks WHERE id = ${account.id} FOR UPDATE`;
+
         const maxRetries = 5;
         let attempt = 0;
         let success = false;
-        const getAccountId = await this.prisma.accounts.findUnique({
-          where: { account_number: data.accountNumber },
-          select : { id : true }
-        });
+
         while(attempt < maxRetries && !success) {
           let submitOrder;
           if (data.orderType == "market") {
             submitOrder = await prisma.order.create({
               data: {
-                account_id: getAccountId.id,
+                account_id: account[0].id,
                 stock_id: data.stockId,
                 price: 0,
                 number: data.number,
@@ -112,10 +117,11 @@ export class OrdersService {
                 trading_type: "buy"
               }
             });
-          } else if(data.orderType == "limit") {
+          }
+          else if(data.orderType == "limit") {
             submitOrder = await prisma.order.create({
               data: {
-                account_id: getAccountId.id,
+                account_id: account[0].id,
                 stock_id: data.stockId,
                 price: data.price,
                 number: data.number,
@@ -125,48 +131,60 @@ export class OrdersService {
             });
           }
           try {
-            await this.ordersLogic.order(prisma, data, submitOrder, "buy");
-            success = true;
-            return;
+            const result = await this.ordersExecution.order(prisma, data, submitOrder, "buy");
+            if(result) {
+              success = true;
+              break;
+            }
           } catch (error) {
-            if (error.code === 'P2034') {
+            if (error.code === 'P2034' || error.code === "P2010") {
                 attempt++;
-                console.log(`Retrying transaction... Attempt ${attempt}`);
+                console.log(`ErrorCode[${error.code}]Retrying transaction... Attempt ${attempt}`);
                 await new Promise(resolve => setTimeout(resolve, 100));
-            } else {
+            } 
+            else {
                 console.log(error)
                 throw Error("Internet server Error")
             }
           }
         }
       });
-      await this.websocket.stockUpdate();
+
+      await this.websocket.stockUpdate(data.stockId);
     } catch (err) {
-      console.log(err)
-      throw new InternalServerErrorException("서버에 오류가 발생했습니다");
+      if (err instanceof BadRequestException) {
+        throw new BadRequestException(err.message);
+      }
+      else {
+        console.log(err)
+        throw new InternalServerErrorException("서버에 오류가 발생했습니다");
+      }
     }
   }
 
   async sell(data: SellDto, user) {
-    const resultMessage = await this.ordersValidation.buySellValidate(data, user, "sell");
-    if (resultMessage) {
-      throw new BadRequestException(resultMessage)
-    }
     try {
       await this.prisma.$transaction(async (prisma: PrismaClient) => {
+        
+        const resultMessage = await this.ordersValidation.buySellValidate(data, user, "sell");
+        if (resultMessage) {
+          throw new BadRequestException(resultMessage);
+        }
+
+        const account: { user_id: number, id: number, money: number } = 
+        await prisma.$queryRaw`SELECT user_id, id, money FROM accounts WHERE account_number = ${data.accountNumber}`;
+        await prisma.$queryRaw`SELECT * FROM user_stocks WHERE id = ${account.id} FOR UPDATE`;
+
         const maxRetries = 5;
         let attempt = 0;
         let success = false;
-        const getAccountId = await this.prisma.accounts.findUnique({
-          where: { account_number: data.accountNumber },
-          select : { id : true }
-        });
+
         while(attempt < maxRetries && !success) {
           let submitOrder;
           if (data.orderType == "market") {
             submitOrder = await prisma.order.create({
               data: {
-                account_id: getAccountId.id,
+                account_id: account[0].id,
                 stock_id: data.stockId,
                 price: 0,
                 number: data.number,
@@ -174,10 +192,11 @@ export class OrdersService {
                 trading_type: "sell"
               }
             });
-          } else if (data.orderType == "limit") {
+          }
+          else if (data.orderType == "limit") {
             submitOrder = await prisma.order.create({
               data: {
-                account_id: getAccountId.id,
+                account_id: account[0].id,
                 stock_id: data.stockId,
                 price: data.price,
                 number: data.number,
@@ -186,27 +205,35 @@ export class OrdersService {
               }
             });
           }
-
           try {
-            await this.ordersLogic.order(prisma, data, submitOrder, "sell");
-            success = true;
-            return;
+            const result = await this.ordersExecution.order(prisma, data, submitOrder, "sell");
+            if(result) {
+              success = true;
+              break;
+            }
           } catch (error) {
-            if (error.code === 'P2034') {
+            if (error.code === 'P2034' || error.code === "P2010") {
                 attempt++;
-                console.log(`Retrying transaction... Attempt ${attempt}`);
-                await new Promise(resolve => setTimeout(resolve, 100));
-            } else {
-                console.log(error)
-                throw Error("Internet server Error")
+                console.log(`ErrorCode[${error.code}]Retrying transaction... Attempt ${attempt}`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } 
+            else {
+              console.log(error)
+              throw Error("Internet server Error")
             }
           }
         }
       });
-      await this.websocket.stockUpdate();
+
+      await this.websocket.stockUpdate(data.stockId);
     } catch (err) {
-      console.log(err)
-      throw new InternalServerErrorException("서버에 오류가 발생했습니다");
+      if (err instanceof BadRequestException) {
+        throw new BadRequestException(err.message);
+      }
+      else {
+        console.log(err)
+        throw new InternalServerErrorException("서버에 오류가 발생했습니다");
+      }
     }
   }
 
@@ -216,7 +243,7 @@ export class OrdersService {
       throw new BadRequestException(resultMessage);
     }
     try {
-      await this.prisma.order.update({
+      const result = await this.prisma.order.update({
         data : {
           price : data.price
         },
@@ -224,7 +251,7 @@ export class OrdersService {
           id : data.orderId
         }
       });
-      await this.websocket.stockUpdate();
+      await this.websocket.stockUpdate(result.stock_id);
     } catch(err) {
       console.log(err)
       throw new InternalServerErrorException("서버에 오류가 발생했습니다")
@@ -267,7 +294,7 @@ export class OrdersService {
         console.log("money");
       }
 
-      await this.websocket.stockUpdate();
+      await this.websocket.stockUpdate(order.stock_id);
     } catch(err) {
       console.log(err)
       throw new InternalServerErrorException("서버에 오류가 발생했습니다");
