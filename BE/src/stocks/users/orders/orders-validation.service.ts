@@ -147,7 +147,11 @@ export class OrdersValidationService {
         return "존재하지 않는 주문입니다";
       } else if (orderCheck.account_id != accountCheck.id) {
         return "요청한 계좌의 유저정보와 요청한 유저가 동일하지 않습니다";
-      } else if (orderCheck.status == "c") {
+      } 
+      else if (orderCheck.status == "y") {
+        return "이미 체결된 주문은 취소할 수 없습니다";
+      }
+      else if (orderCheck.status == "c") {
         return "이미 취소된 주문입니다";
       }
     }

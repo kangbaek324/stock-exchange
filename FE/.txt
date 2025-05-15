@@ -1,9 +1,12 @@
 할꺼
 
-// 1. 주문 취소 구현
-// 2. 웹소켓 짜기
-// 4. 호가 단위 구현
-// 5. RabbitMQ 공부 / 적용하기
+// 1. 주문 취소 구현 O
+// 2. 웹소켓 짜기 O
+// 4. 호가 단위 구현 O
+// 5. RabbitMQ 공부 / 적용하기 O
+
+*이미 체결된 주문 취소주문이 들어가는 오류
+*
 
 
 6. 스웨거 마무리
@@ -11,4 +14,13 @@
 8. VI 구현하기 
 *. 최적화
 
+{
+    "username" : "admin2",
+    "password" : "Admin@qlalf#12!"
+}
 
+1001 
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInVzZXJuYW1lIjoiYWRtaW4yIiwiaWF0IjoxNzQ3MzE0NDQ5fQ.un5dwKgb1heU1ma0Y07uJphgR0lQpRzAL_gL1uOm2aw
+
+1002
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjMsInVzZXJuYW1lIjoiYWRtaW4zIiwiaWF0IjoxNzQ3MzE0NDY1fQ.Tq0XFy1HJY-Ict4BLVUGgMHizoZn45JmQ4f5PKl1WuY

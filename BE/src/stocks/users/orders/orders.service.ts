@@ -21,28 +21,34 @@ export class OrdersService {
     private readonly websocket: WebsocketGateway
   ) {}
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
   async sendMQ(
     data: BuyDto | SellDto | CancelDto | EditDto,
     user,
     type: "buy" | "sell" | "cancell" | "edit"
   ) {
     const mqData = {
-      data: {
-        data,
-        user
-      },
-      type: type
+      data,
+      type: type,
+      user,
+      timestamp: Number(process.hrtime.bigint()),
     }
 
-    this.client.emit("order", mqData);
-  }
+    return await this.client.send("order", mqData);
+  } 
 
   async sendOrder(mqData) {
-    console.log("ads");
+    if (mqData.type === "buy") {
+      return await this.buy(mqData.data, mqData.user);
+    }
+    else if (mqData.type === "sell") {
+      return await this.sell(mqData.data, mqData.user);
+    }
+    else if (mqData.type === "cancell") {
+      return await this.cancel(mqData.data, mqData.user);
+    }
+    else if (mqData.type === "edit") {
+      return await this.edit(mqData.data, mqData.user);
+    }
   }
 
   async getOrder(query: GetOrderDto, user) {

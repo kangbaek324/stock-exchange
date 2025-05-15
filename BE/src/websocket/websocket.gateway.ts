@@ -3,7 +3,7 @@ import { ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect,
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 
-@WebSocketGateway(3001, {
+@WebSocketGateway(3003, {
   namespace : "stock",
   cors : { origin: '*' }
 })
@@ -73,7 +73,6 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       sellorderbookData : sellorderbookData,
       match : match
     }
-
     this.server.to(stockIdToString).emit('stockUpdated', data);
   }
 }

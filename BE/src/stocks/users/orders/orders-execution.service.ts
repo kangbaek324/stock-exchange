@@ -4,9 +4,6 @@ import { SellDto } from "./dtos/sell.dto";
 import { PrismaClient } from "@prisma/client";
 import * as utils from "./utils/orders.util";
 
-/**
- * 주식 매수, 매도 로직
- */
 @Injectable()
 export class OrdersExecutionService {
     async order(

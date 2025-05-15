@@ -440,7 +440,7 @@
         </main>
         <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
         <script>
-            const socket = io('http://localhost:3001/stock');
+            const socket = io('http://localhost:3003/stock');
         
             socket.on('connect', () => {
                 console.log('서버에 연결되었습니다.');
@@ -449,6 +449,7 @@
             socket.emit("joinRoom", 1);
             // 서버로부터 주식 업데이트 수신
             socket.on('stockUpdated', (data) => {
+                console.log(data);
                 updateStockInfo(data.stockInfo);
                 updateOrderBook(data.buyorderbookData, data.sellorderbookData);
                 fillMatchData(data.match);
