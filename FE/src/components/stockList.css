@@ -1,0 +1,24 @@
+#stocks {
+    width: 25%;
+    background-color: white;
+    border-radius: 15px;
+    padding: 10px;
+}
+
+.stock {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    gap: 10px;
+    font-size: 20px;
+}
+
+.stock p {
+    margin: 0;
+}
+
+.stock img {
+    width: 33px;
+    height: 32px;
+}
+

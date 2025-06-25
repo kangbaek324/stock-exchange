@@ -1,0 +1,18 @@
+.searchBar {
+    width: 100%;
+    height: 10%;
+    display: flex;
+    align-items: center;
+}
+
+#bar {
+    margin: 0 auto;
+}
+
+#bar input {
+    width: 550px;
+    height: 40px;
+    border-radius: 71px;
+    border: 1px solid #C0C0C0;
+    padding-left: 30px;
+}

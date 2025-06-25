@@ -1,0 +1,97 @@
+* {
+  box-sizing: border-box;
+}
+
+
+#orderBook {
+    width: 73%;
+    height: 100%;
+    background-color: white;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+#sell, #buy {
+    height: 50%;
+    display: flex;
+}
+
+.vp, #info, #match {
+    width: 35%;
+    height: 100%;
+}
+
+.volume {
+    width: 65%;
+    height: 100%;
+}
+
+.per {
+    width: 35%;
+    height: 100%;
+    border-left: 1px solid 	#D3D3D3;
+}
+
+.ho {
+    height: 10%;
+    width: 100%;
+    border-bottom: 1px solid 	#D3D3D3;
+    display: flex;
+}
+
+.price {
+    width: 30%;
+    border-left: 1px solid 	#D3D3D3;
+    border-right: 1px solid 	#D3D3D3;
+}
+
+#sell {
+    background: #EEECFF;
+    background: linear-gradient(180deg, rgba(238, 236, 255, 1) 0%, rgba(255, 255, 255, 1) 100%);
+}
+
+#buy {
+    background: #FFE9E5;
+    background: linear-gradient(360deg, rgba(255, 233, 229, 1) 0%, rgba(255, 255, 255, 1) 100%);
+}
+
+#info, #match {
+    background-color: white;
+}
+
+#sell .volume,
+#buy .volume 
+{
+    background-color: white;
+}
+
+
+#sell .vp,
+#sell #info, 
+#sell .price 
+{
+    border-bottom: 1px solid 	#D3D3D3;
+}
+
+#buy .per {
+    border-left: none;
+    border-right: 1px solid 	#D3D3D3;
+}
+
+#buy .vp .ho:nth-child(10) {
+    border-bottom: none;
+}
+
+#sell .vp .ho:nth-child(10) {
+    border-bottom: none;
+}
+
+.priceValue {
+    height: 10%;
+    width: 100%;
+    border-bottom: 1px solid 	#D3D3D3;
+}
+
+.price .priceValue:nth-child(10) {
+    border-bottom: none;
+}

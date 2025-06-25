@@ -1,0 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=42dot+Sans:wght@300..800&display=swap');@import url('https://fonts.googleapis.com/css2?family=Gothic+A1&display=swap');
+
+* {
+  font-family: "42dot Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}

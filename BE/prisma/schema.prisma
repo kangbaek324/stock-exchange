@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderType {
+  limit
+  market
+}
+
+enum TradingType {
+  buy
+  sell
+}
+
+enum status {
+  y
+  n
+  c
+}
+
+model users {
+  id         Int      @id @default(autoincrement())
+  username   String   @unique @db.VarChar(20)
+  password   String   @db.VarChar(60)
+  email      String   @unique @db.VarChar(50)
+  created_at DateTime @default(now())
+
+  accounts accounts[]
+}
+
+model accounts {
+  id             Int      @id @default(autoincrement())
+  user_id        Int      
+  account_number Int      @unique
+  money          BigInt
+  created_at     DateTime  @default(now())
+
+  user_stocks user_stocks[]
+  order order[]
+  users users @relation(fields: [user_id], references: [id])
+}
+
+model stocks {
+  id    Int      @id @default(autoincrement())
+  name  String   @unique @db.VarChar(30)
+  price Int
+  created_at  DateTime @default(now())
+  broken_at   DateTime? 
+
+  user_stocks user_stocks[]
+  order order[]
+  order_match order_match[]
+}
+
+model user_stocks {
+  id         Int   @id @default(autoincrement())
+  account_id Int
+  stock_id   Int
+  number     BigInt
+  can_number BigInt
+  average    Int
+  total_buy_amount BigInt @default(0)
+
+  accounts accounts @relation(fields: [account_id], references: [id])
+  stocks stocks @relation(fields: [stock_id], references: [id])
+}
+
+model order {
+  id           Int         @id @default(autoincrement())
+  account_id   Int
+  stock_id     Int
+  price        Int
+  number       BigInt
+  match_number BigInt?        @default(0)
+  order_type   OrderType
+  status       status?     @default(n)
+  trading_type TradingType
+  created_at   DateTime    @default(now())
+
+  order_matchA order_match[] @relation("OrderAsInitial")
+  order_matchB order_match[] @relation("OrderAsMatched")
+
+  accounts accounts @relation(fields: [account_id], references: [id])
+  stocks stocks @relation(fields: [stock_id], references: [id])
+}
+
+model order_match {
+  id               Int      @id @default(autoincrement())
+  stock_id         Int
+  number           BigInt
+  initial_order_id Int
+  order_id         Int
+  matched_at       DateTime @default(now())
+
+  stocks stocks @relation(fields: [stock_id], references: [id])
+  orderA order @relation("OrderAsInitial", fields: [initial_order_id], references: [id])
+  orderB order @relation("OrderAsMatched", fields: [order_id], references: [id])
+}
+

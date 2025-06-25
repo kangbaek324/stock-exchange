@@ -1,0 +1,54 @@
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #FCFCFC;
+    height: 100vh;
+    margin: 0;
+}
+
+.super-main {
+    width: 1700px;
+    height: 1000px;
+}
+
+main {
+    height: 90%;
+    width: 100%;
+}
+
+.main {
+    height: 90%;
+    width: 100%;
+    display: flex;
+    gap: 15px;
+}
+
+.stockInfo {
+    width: 60%;
+    height: 100%;
+    display: flex;
+    gap: 15px;
+}
+
+.myInfo {
+    width: 40%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.order {
+    height: 52%;    
+    width: 100%;
+    display: flex;
+    gap: 15px;
+}
+
+.my {
+    background-color: white;
+    border-radius: 15px;
+    height: 48%;    
+    width: 100%;
+}
