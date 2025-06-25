@@ -3,11 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 const OrderBook = () => {
-  const socket = new io("http://localhost:3003/stock");
-
   useEffect(() => {
   const socket = io("http://localhost:3003/stock"); 
 
+    socket.emit()
     socket.on("order_data", (data) => {
       console.log("서버로부터 받은 주문 정보:", data);
     });

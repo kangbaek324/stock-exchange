@@ -11,6 +11,8 @@ interface userInfo {
 }
 
 const clientInfo = new Map<string, userInfo>(); // clientId : userInfo
+const clientJoinStockRoom = new Map<string, number>(); // clientId : stockId
+
 /**
  * 방 종류
  * 
@@ -46,11 +48,20 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     if (clientInfo.get(client.id)) {
       clientInfo.delete(client.id);
     }
+
+    if (clientJoinStockRoom.get(client.id)) {
+      clientJoinStockRoom.delete(client.id);
+    }
   }
   
   @SubscribeMessage("joinStockRoom")
   handleJoinStockRoom(@MessageBody() stockId: number, @ConnectedSocket() client: CustomSocket) {
     const stockIdToString = stockId.toString();
+
+    if (clientJoinStockRoom.get(client.id)) {
+      client.leave("stockId_" + clientJoinStockRoom.get(client.id));
+      clientJoinStockRoom.delete(client.id);
+    }
     client.join("stockId_" + stockIdToString);
     this.stockUpdate(stockId);
   }

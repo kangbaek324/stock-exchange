@@ -11,9 +11,12 @@ const Signin = () => {
     e.preventDefault();
 
     try {
-      const response = await axios.post('http://localhost:3000/auth/signin', {
+      await axios.post('http://localhost:3000/auth/signin', {
         username,
         password,
+      }, 
+      { 
+        withCredentials: true
       });
       alert("로그인에 성공하였습니다");
       navigate("/stock")

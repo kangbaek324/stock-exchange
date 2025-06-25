@@ -1,5 +1,5 @@
 import axios from 'axios';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from "react-router-dom";
 
 const Signup = () => {
@@ -11,7 +11,7 @@ const Signup = () => {
   const handleSignup = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:3000/auth/signup', {
+      await axios.post('http://localhost:3000/auth/signup', {
         username,
         password,
         email
