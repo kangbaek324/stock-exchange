@@ -13,17 +13,17 @@ export class WsGuard implements CanActivate {
         context: any,
     ): boolean | any | Promise<boolean | any> | Observable<boolean | any> {
         const client = context.switchToWs().getClient();
-        const authHeader = client.handshake?.headers?.authorization;
-        if (!authHeader) {
-            client.emit('error_custom', { message: '인증 토큰이 없습니다.' });
+        const accessToken = client.handshake?.headers?.cookie;
+        if (!accessToken) {
+            client.emit('errorCustom', { message: '인증 토큰이 없습니다.' });
             return false;
         }
         try {
-            const decoded = jwt.verify(authHeader.substr(7), this.config.get<string>("JWT_SECRET"));
+            const decoded = jwt.verify(accessToken.substr(12), this.config.get<string>("JWT_SECRET"));
             client.user = decoded;
             return true;
         } catch(err) {
-            client.emit('error_custom', { message: '유효하지 않은 토큰 입니다.' });
+            client.emit('errorCustom', { message: '유효하지 않은 토큰 입니다.' });
             return false;
         }
     }

@@ -23,7 +23,7 @@ const clientJoinStockRoom = new Map<string, number>(); // clientId : stockId
 
 @UseGuards(WsGuard)
 @WebSocketGateway(3003, {
-  namespace : "stock",
+  namespace : "/stock",
   cors : { origin: '*' }
 })
 export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
@@ -54,14 +54,16 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
   }
   
+  
   @SubscribeMessage("joinStockRoom")
   handleJoinStockRoom(@MessageBody() stockId: number, @ConnectedSocket() client: CustomSocket) {
     const stockIdToString = stockId.toString();
-
+    
     if (clientJoinStockRoom.get(client.id)) {
       client.leave("stockId_" + clientJoinStockRoom.get(client.id));
       clientJoinStockRoom.delete(client.id);
     }
+    console.log("ds")
     client.join("stockId_" + stockIdToString);
     this.stockUpdate(stockId);
   }
