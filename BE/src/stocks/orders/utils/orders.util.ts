@@ -1,4 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
 
 /**
  * 주문제출
@@ -174,11 +178,59 @@ export async function orderCompleteUpdate(prisma, orders, number?: number) {
  */
 export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) {
     await prisma.stocks.update({
-        where : { id : data.stockId },
-        data : {
+        where: { id : data.stockId },
+        data: {
             price : updatePrice
         }
     });
+
+    const today = dayjs().utc().format("YYYY-MM-DD");
+    const stockHistory = await prisma.stock_history.findUnique({
+        where: {
+            stock_id_date: {
+                stock_id: data.stockId,
+                date: new Date(today)
+            }
+        }
+    });
+
+    if (!stockHistory) {
+        await prisma.stock_history.create({
+            data: {
+                stock_id: data.stockId,
+                date: new Date(today),
+                low: updatePrice,
+                high: updatePrice,
+                close: updatePrice
+            }
+        })
+    }
+    if (stockHistory.low > updatePrice) {
+        await prisma.stock_history.update({
+            where: {
+                stock_id_date: {
+                    stock_id: data.stockId,
+                    date: new Date(today)
+                }
+            },
+            data: {
+                low: updatePrice
+            }
+        });
+    }
+    if (stockHistory.high < updatePrice) {
+        await prisma.stock_history.update({
+            where: {
+                stock_id_date: {
+                    stock_id: data.stockId,
+                    date: new Date(today)
+                }
+            },
+            data: {
+                high: updatePrice
+            }
+        });
+    }
 }
 
 /**

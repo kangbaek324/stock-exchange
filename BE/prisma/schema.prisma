@@ -64,7 +64,8 @@ model stock_history {
   high     Int
   low      Int
   close    Int
-
+  open     Int
+  
   stock stocks @relation(fields: [stock_id], references: [id], onDelete: Cascade)
   @@id([stock_id, date])
 }

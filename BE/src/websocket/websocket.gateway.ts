@@ -4,6 +4,10 @@ import { Server, Socket } from 'socket.io';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { WsGuard } from './ws.guard';
 import { CustomSocket } from './interfaces/custom-socket.interface';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
 
 interface userInfo {
   userId: number;
@@ -121,6 +125,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
   public async stockUpdate(stockId: number) {
     const stockIdToString = stockId.toString();
+    const today = dayjs().utc().format("YYYY-MM-DD");
     let data = {};
 
     const stockInfo = await this.prisma.stocks.findUnique({
@@ -132,6 +137,16 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         price : true
       }
     });
+
+    const stockHistory = await this.prisma.stock_history.findUnique({
+      where : {
+        stock_id_date : {
+          stock_id: stockId,
+          date: new Date(today)
+        }
+      }
+    });
+
     let buyOrderbookData = await this.prisma.$queryRaw
     `
       SELECT trading_type, price, SUM(number - match_number) AS number
@@ -162,10 +177,11 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
 
     data = {
-      stockInfo : stockInfo,
-      buyOrderbookData : buyOrderbookData,
-      sellOrderbookData : sellOrderbookData,
-      match : matchData
+      stockInfo: stockInfo,
+      stockHistory: stockHistory, 
+      buyOrderbookData: buyOrderbookData,
+      sellOrderbookData: sellOrderbookData,
+      match: matchData
     }
 
     this.server.to("stockId_" + stockIdToString).emit("stockUpdated", data);
