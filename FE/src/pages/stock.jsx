@@ -4,12 +4,13 @@ import OrderBox from "../components/OrderBox";
 import StockList from "../components/stockList";
 import SearchBar from "../components/SearchBar"
 import Header from "../components/Header"
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import './stock.css';
 
 const Stock = () => {
   const mySelect = 1;
+  const [stockData, setStockData] = useState(null);
 
   useEffect(() => {
     const socket = io("http://localhost:3003/stock", {
@@ -27,7 +28,7 @@ const Stock = () => {
       })
   
       socket.on("stockUpdated", (data) => {
-        console.log("서버로부터 받은 주문 정보:", data);
+        setStockData(data);
       });
 
     })
@@ -45,7 +46,7 @@ const Stock = () => {
         <div className="main">
           <div className="stockInfo">
             <StockList></StockList>
-            <OrderBook></OrderBook>
+            <OrderBook stockData={stockData}></OrderBook>
           </div>
           <div className="myInfo">
             <div className="my">

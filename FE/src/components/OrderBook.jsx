@@ -1,34 +1,62 @@
 import "./OrderBook.css";
 
-const OrderBook = () => {  
+const OrderBook = ({ stockData }) => {  
   let buyVp = [];
   let sellVp = [];
   let sellPrice = [];
   let buyPrice = [];
 
-  for(let i = 1; i <= 10; i++) {
+  
+  if (stockData == null) {
+    return;
+  }
+  
+  console.log(stockData)
+
+  for(let i = 9; i > -1; i--) {
     sellVp.push(
       <div className="ho">
-        <div className="volume"></div>
+        <div className="volume">
+          <div className="stick">
+            {stockData.sellOrderbookData[i].number}
+          </div>
+        </div>
         <div className="per"></div>
       </div>
     )
 
+    if (stockData.sellOrderbookData[i].price > 0) {
+      sellPrice.push(
+        <div className="priceValue redText">{stockData.sellOrderbookData[i].price}</div>
+      )
+    }
+    else if (stockData.sellOrderbookData[i].price < 0) {
+      sellPrice.push(
+        <div className="priceValue blueText">{stockData.sellOrderbookData[i].price}</div>
+      )
+    }
+    else {
     sellPrice.push(
-      <div className="priceValue"></div>
-    )
+        <div className="priceValue blackText">{stockData.sellOrderbookData[i].price}</div>
+      )
+    }
   }
 
-  for(let i = 10; i >= 1; i--) {
+  for(let i = 0; i < 10; i++) {
+    console.log()
     buyVp.push(
       <div className="ho">
         <div className="per"></div>
-        <div className="volume"></div>
+        <div className="volume">
+          <div className="stick">
+            {stockData.buyOrderbookData[i].number}
+          </div>
+        </div>
       </div>
     )
 
     buyPrice.push(
-      <div className="priceValue"></div>
+      <div className="priceValue">{stockData.buyOrderbookData[i].price}</div>
     )
   }
 
