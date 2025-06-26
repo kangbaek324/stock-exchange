@@ -63,7 +63,6 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       client.leave("stockId_" + clientJoinStockRoom.get(client.id));
       clientJoinStockRoom.delete(client.id);
     }
-    console.log("ds")
     client.join("stockId_" + stockIdToString);
     this.stockUpdate(stockId);
   }
@@ -133,7 +132,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         price : true
       }
     });
-    let buyorderbookData = await this.prisma.$queryRaw
+    let buyOrderbookData = await this.prisma.$queryRaw
     `
       SELECT trading_type, price, SUM(number - match_number) AS number
       FROM \`order\` o
@@ -142,7 +141,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       ORDER BY price DESC
       LIMIT 10
     `
-    let sellorderbookData = await this.prisma.$queryRaw
+    let sellOrderbookData = await this.prisma.$queryRaw
     `
       SELECT trading_type, price, SUM(number - match_number) AS number
       FROM \`order\` o
@@ -164,8 +163,8 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
     data = {
       stockInfo : stockInfo,
-      buyorderbookData : buyorderbookData,
-      sellorderbookData : sellorderbookData,
+      buyOrderbookData : buyOrderbookData,
+      sellOrderbookData : sellOrderbookData,
       match : matchData
     }
 

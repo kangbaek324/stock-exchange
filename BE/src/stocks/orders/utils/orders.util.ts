@@ -172,7 +172,7 @@ export async function orderCompleteUpdate(prisma, orders, number?: number) {
 /**
  * 체결된 가격으로 주식가격 업데이트
  */
-export async function stockPriceUpdate(prisma, data, updatePrice) {
+export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) {
     await prisma.stocks.update({
         where : { id : data.stockId },
         data : {

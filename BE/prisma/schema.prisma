@@ -55,7 +55,20 @@ model stocks {
   user_stocks user_stocks[]
   order order[]
   order_match order_match[]
+  stockHistory stock_history[]
 }
+
+model stock_history {
+  stock_id Int
+  date     DateTime @db.Date 
+  high     Int
+  low      Int
+  close    Int
+
+  stock stocks @relation(fields: [stock_id], references: [id], onDelete: Cascade)
+  @@id([stock_id, date])
+}
+
 
 model user_stocks {
   id         Int   @id @default(autoincrement())
