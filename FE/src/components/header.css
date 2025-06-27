@@ -22,3 +22,17 @@
     margin-bottom: 15px;
     width: 5%;
 }
+
+#stockPrice {
+    margin-left: 30px;
+}
+
+.up {
+    color: red;
+}
+.down {
+    color: blue;
+}
+.neutral {
+    color: black;
+}

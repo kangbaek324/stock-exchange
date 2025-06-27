@@ -4,7 +4,7 @@ import { Payload } from 'src/auth/interfaces/payload.interface';
 import { GetUser } from 'src/common/decorator/get-user.decorator';
 import { AccountService } from './account.service';
 
-@Controller('stocks/account')
+@Controller()
 @UseGuards(AuthGuard("jwt"))
 export class AccountController {
     constructor(

@@ -1,7 +1,18 @@
 {
+  "name": "stock-trading-bot",
+  "version": "1.0.0",
+  "description": "Stock trading simulation bot",
+  "main": "index.js",
+  "scripts": {
+    "buy": "node buy.js",
+    "sell": "node sell.js",
+    "both": "concurrently \"node buy.js\" \"node sell.js\""
+  },
   "dependencies": {
-    "node-fetch": "^3.3.2",
-    "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.7.2",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
   }
 }

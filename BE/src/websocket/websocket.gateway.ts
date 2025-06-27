@@ -62,12 +62,13 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   @SubscribeMessage("joinStockRoom")
   handleJoinStockRoom(@MessageBody() stockId: number, @ConnectedSocket() client: CustomSocket) {
     const stockIdToString = stockId.toString();
-    
+
     if (clientJoinStockRoom.get(client.id)) {
       client.leave("stockId_" + clientJoinStockRoom.get(client.id));
       clientJoinStockRoom.delete(client.id);
     }
     client.join("stockId_" + stockIdToString);
+    clientJoinStockRoom.set(client.id, stockId)
     this.stockUpdate(stockId);
   }
 
@@ -96,6 +97,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         if (account.user_id == userId) {
           client.leave("accountId_" + clientInfo.get(client.id).accountId);
           client.join("accountId" + account.id);
+          clientInfo.set(client.id, { userId: userId, accountId: account.id })
           this.accountUpdate(account.id)
         }
         else {
@@ -126,6 +128,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   public async stockUpdate(stockId: number) {
     const stockIdToString = stockId.toString();
     const today = dayjs().utc().format("YYYY-MM-DD");
+    const yesterday = dayjs().utc().subtract(1, "day").format("YYYY-MM-DD");
     let data = {};
 
     const stockInfo = await this.prisma.stocks.findUnique({
@@ -139,13 +142,25 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     });
 
     const stockHistory = await this.prisma.stock_history.findUnique({
-      where : {
-        stock_id_date : {
+      where: {
+        stock_id_date: {
           stock_id: stockId,
           date: new Date(today)
         }
       }
     });
+
+    const previousClose = await this.prisma.stock_history.findUnique({
+      where: {
+        stock_id_date: {
+          stock_id: stockId,
+          date: new Date(yesterday)
+        }
+      },
+      select: {
+        close: true
+      }
+    })
 
     let buyOrderbookData = await this.prisma.$queryRaw
     `
@@ -179,6 +194,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     data = {
       stockInfo: stockInfo,
       stockHistory: stockHistory, 
+      previousClose: previousClose,
       buyOrderbookData: buyOrderbookData,
       sellOrderbookData: sellOrderbookData,
       match: matchData

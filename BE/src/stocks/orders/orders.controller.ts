@@ -11,7 +11,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { Ctx, EventPattern, MessagePattern, Payload, RmqContext } from '@nestjs/microservices';
 
 @ApiTags("stock")
-@Controller("stocks/orders")
+@Controller()
 export class OrdersController {
   constructor(private readonly OrdersService: OrdersService) {}
   

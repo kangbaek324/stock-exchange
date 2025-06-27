@@ -1,24 +1,34 @@
-import "./stockList.css"
-import stock from "../img/Stock.png"
+import "./stockList.css";
+import stock from "../img/Stock.png";
+import axios from "axios";
+import { useEffect, useState } from "react";
 
-const StockList = () => {
-    return (
-        <div id="stocks">
-            <div className="stock">
-                <img src={stock} alt="" />
-                <p>문경테크놀로지</p>
-            </div>
+const StockList = ({ changeStock }) => {
+  const [stockList, setStockList] = useState([]);
 
-            <div className="stock">
-                <img src={stock} alt="" />
-                <p>은수에어로스페이스</p>
-            </div>
-            <div className="stock">
-                <img src={stock} alt="" />
-                <p>환성물산</p>
-            </div>
+  useEffect(() => {
+    const fetchStocks = async () => {
+      try {
+        const res = await axios.get("http://localhost:3000/stocks/info");
+        setStockList(res.data); 
+      } catch (err) {
+        console.log(err);
+      }
+    };
+
+    fetchStocks();
+  }, []);
+
+  return (
+    <div id="stocks">
+      {stockList.map((stockItem) => (
+        <div className="stock" key={stockItem.id} onClick={() => changeStock(stockItem.id)}>
+          <img src={stock} alt="" />
+          <p>{stockItem.name}</p>
         </div>
-    )
-}
+      ))}
+    </div>
+  );
+};
 
 export default StockList;

@@ -201,11 +201,39 @@ export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) 
                 date: new Date(today),
                 low: updatePrice,
                 high: updatePrice,
-                close: updatePrice
+                close: updatePrice,
+                open: updatePrice
             }
         })
     }
-    if (stockHistory.low > updatePrice) {
+    else {        
+        if (stockHistory.low > updatePrice) {
+            await prisma.stock_history.update({
+                where: {
+                    stock_id_date: {
+                        stock_id: data.stockId,
+                        date: new Date(today)
+                    }
+                },
+                data: {
+                    low: updatePrice
+                }
+            });
+        }
+        if (stockHistory.high < updatePrice) {
+            await prisma.stock_history.update({
+                where: {
+                    stock_id_date: {
+                        stock_id: data.stockId,
+                        date: new Date(today)
+                    }
+                },
+                data: {
+                    high: updatePrice
+                }
+            });
+        }
+    
         await prisma.stock_history.update({
             where: {
                 stock_id_date: {
@@ -214,20 +242,7 @@ export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) 
                 }
             },
             data: {
-                low: updatePrice
-            }
-        });
-    }
-    if (stockHistory.high < updatePrice) {
-        await prisma.stock_history.update({
-            where: {
-                stock_id_date: {
-                    stock_id: data.stockId,
-                    date: new Date(today)
-                }
-            },
-            data: {
-                high: updatePrice
+                close: updatePrice
             }
         });
     }

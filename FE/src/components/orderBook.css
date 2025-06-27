@@ -21,6 +21,14 @@
     height: 100%;
 }
 
+.vp {
+    background-color: white;
+}
+
+#match {
+    overflow-y: scroll;
+}
+
 .volume {
     display: flex;
     align-items: center;
@@ -32,6 +40,10 @@
     width: 35%;
     height: 100%;
     border-left: 1px solid 	#D3D3D3;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
 }
 
 .ho {
@@ -61,6 +73,16 @@
     background-color: white;
 }
 
+#info {
+    padding: 15px;
+    display: flex;
+    align-items: flex-end;
+}
+
+#info p {
+    margin: 0;
+}
+
 #sell .volume,
 #buy .volume 
 {
@@ -88,6 +110,7 @@
     border-bottom: none;
 }
 
+
 .priceValue {
     height: 10%;
     width: 100%;
@@ -97,10 +120,6 @@
     align-items: center;
     font-size: 25px;
     font-weight: 100;
-}
-
-.price .priceValue:nth-child(10) {
-    border-bottom: none;
 }
 
 .stick {
@@ -134,4 +153,38 @@
 
 .blackText {
     color: black;
+}
+
+.matchValue {
+    display: flex;
+    padding-left: 30px;
+    gap: 45px;
+    font-size: 20px;
+}
+
+
+.matchValue p {
+    margin: 10px 0px;
+}
+
+
+.priceValue .message {
+    width: 12px;
+    font-size: 15px;
+    display: flex;
+    justify-content: center;
+    height: 100%;
+    margin-top: 10px;
+    position: relative;
+    right: 63px;
+}
+
+.priceValue .value {
+    font-weight: 100;
+    position: relative;
+    right: 5px;
+}
+
+.nowPrice {
+    border: 1px solid black; 
 }
