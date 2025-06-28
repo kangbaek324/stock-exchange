@@ -1,0 +1,41 @@
+table {
+  width: 100%;
+}
+
+th, td {
+  width: 110px;
+  text-align: left;
+  padding-right: 25px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#accountInfo {
+  display: flex;
+  margin-bottom: 10px;
+}
+
+#accountInfo div:nth-child(1),
+#accountInfo div:nth-child(2) {
+  width: 50%;
+}
+
+#accountInfo div:first-child div:first-child,
+#accountInfo div:nth-child(2) div:first-child {
+  margin-bottom: 20px;
+}
+
+#accountInfo p {
+  margin: 6px 0;
+}
+
+#stockList {
+  overflow-x: auto;
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* IE/Edge */
+}
+
+#stockList::-webkit-scrollbar {
+  display: none;               /* Chrome, Safari */
+}

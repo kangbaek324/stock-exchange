@@ -6,9 +6,8 @@
 }
 
 #menuBar {
-    height: 10%;    
     display: flex;
-    font-size: 20px;
+    gap: 10px;
 }
 
 #menu {

@@ -204,7 +204,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   }
 
   public async accountUpdate(accountId: number) {
-    const account = await this.prisma.user_stocks.findMany({
+    const userStock = await this.prisma.user_stocks.findMany({
       where: { account_id: accountId },
       select: {
         stock_id: true,
@@ -217,27 +217,35 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
             name: true,
           },
         },
-      },
+      }
     });
+
+    const account = await this.prisma.accounts.findUnique({
+      where: {
+        id: accountId
+      }
+    })
     
     let data;
     let dataArray = [];
     
-    for(let i = 0; i < account.length; i++) {
+    for(let i = 0; i < userStock.length; i++) {
       const price = await this.prisma.stocks.findUnique({
-        where: { id: account[i].stock_id },
+        where: { id: userStock[i].stock_id },
         select: { price: true }
       });
       data = {
-        name: account[i].stocks.name,
+        name: userStock[i].stocks.name,
         nowPrice: price.price,
-        amount: account[i].number.toString(),
-        canAmount: account[i].can_number.toString(),
-        average: account[i].average,
-        totalBuyAmount: account[i].total_buy_amount.toString()
+        amount: userStock[i].number.toString(),
+        canAmount: userStock[i].can_number.toString(),
+        average: userStock[i].average,
+        totalBuyAmount: userStock[i].total_buy_amount.toString(),
       }
       dataArray.push(data);
     } 
+
+    dataArray.push({ money: account.money.toString() });
     
     this.server.to("accountId_" + accountId).emit("accountUpdated", dataArray)
   }

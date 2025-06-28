@@ -10,6 +10,7 @@ import './stock.css';
 
 const Stock = () => {
   const [stockData, setStockData] = useState(null);
+  const [accountData, setAccountData] = useState(null);
   const socketRef = useRef(null);
 
   const changeStock = useCallback((stockId) => {
@@ -17,6 +18,12 @@ const Stock = () => {
       socketRef.current.emit("joinStockRoom", stockId);
     }
   }, []);
+
+  const changeAccount = useCallback((accountNumber) => {
+    if (socketRef.current) {
+      socketRef.current.emit("joinAccountRoom", accountNumber);
+    }
+  })
 
   useEffect(() => {
     socketRef.current = io("http://localhost:3003/stock", {
@@ -27,6 +34,7 @@ const Stock = () => {
     socketRef.current.on("connect", () => {
       console.log("연결됨");
       socketRef.current.emit("joinStockRoom", 1);
+      socketRef.current.emit("joinAccountRoom")
     });
 
     socketRef.current.on("errorCustom", (err) => {
@@ -36,6 +44,10 @@ const Stock = () => {
     socketRef.current.on("stockUpdated", (data) => {
       setStockData(data);
     });
+
+    socketRef.current.on("accountUpdated", (data) => {
+      setAccountData(data);
+    })
 
     return () => {
       socketRef.current.disconnect();
@@ -54,7 +66,7 @@ const Stock = () => {
           </div>
           <div className="myInfo">
             <div className="my">
-              <My />
+              <My accountData={accountData}/>
             </div>
             <div className="order">
               <OrderBox optionName1={"BUY"} optionName2={"SELL"} />

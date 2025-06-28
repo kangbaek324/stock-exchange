@@ -4,12 +4,12 @@ import OrderHistory from "./OrderHistory";
 import OrderStatus from "./OrderStatus";
 import "./my.css"
 
-const My = () => {
+const My = ({ accountData }) => {
     const [menu, setMenu] = useState(0);
     const renderMenu = () => {
         switch(menu) {
             case 0:
-                return <Account></Account>;
+                return <Account accountData={accountData}></Account>;
             case 1:
                 return <OrderHistory></OrderHistory>;
             case 2:
