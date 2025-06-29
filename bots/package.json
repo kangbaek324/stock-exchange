@@ -1,18 +1,22 @@
 {
-  "name": "stock-trading-bot",
+  "name": "trading-bots",
   "version": "1.0.0",
-  "description": "Stock trading simulation bot",
-  "main": "index.js",
+  "description": "Automated trading bots for mock stock exchange",
+  "main": "botManager.js",
   "scripts": {
-    "buy": "node buy.js",
-    "sell": "node sell.js",
-    "both": "concurrently \"node buy.js\" \"node sell.js\""
+    "start": "node botManager.js start",
+    "stop": "node botManager.js stop",
+    "status": "node botManager.js status",
+    "buy-bot": "node buyBot.js",
+    "sell-bot": "node sellBot.js",
+    "monitor": "node monitor.js",
+    "start-with-monitor": "node botManager.js start"
   },
   "dependencies": {
     "socket.io-client": "^4.7.2",
-    "axios": "^1.6.0"
+    "axios": "^1.5.0"
   },
-  "devDependencies": {
-    "concurrently": "^8.2.0"
-  }
+  "keywords": ["trading", "bot", "stock", "automation"],
+  "author": "Trading Bot System",
+  "license": "MIT"
 }

@@ -7,6 +7,21 @@ export class AccountService {
         private readonly prismaService: PrismaService,
     ) {}
 
+    async getMyAccountList(user) {
+        let data = [];
+        const accounts = await this.prismaService.accounts.findMany({
+            where: {
+                user_id: user.id
+            }
+        });
+
+        for(let i = 0; i < accounts.length; i++) {
+            data.push(accounts[i].account_number);
+        }
+
+        return data;
+    }
+
     async createAccount(user): Promise<unknown> {
         try {
             const before_account_number = await this.prismaService.accounts.findFirst({
@@ -21,7 +36,7 @@ export class AccountService {
                 }
             });
             return {
-                account_number : response.account_number,
+                accountNumber : response.account_number,
                 money : response.money.toString()
             }
         } catch (err) {

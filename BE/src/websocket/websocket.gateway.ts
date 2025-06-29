@@ -96,7 +96,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   
         if (account.user_id == userId) {
           client.leave("accountId_" + clientInfo.get(client.id).accountId);
-          client.join("accountId" + account.id);
+          client.join("accountId_" + account.id);
           clientInfo.set(client.id, { userId: userId, accountId: account.id })
           this.accountUpdate(account.id)
         }

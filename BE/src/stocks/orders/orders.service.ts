@@ -185,10 +185,20 @@ export class OrdersService {
       });
       
       await this.websocket.stockUpdate(data.stockId);
+
       if (result[0]) {
-        await this.websocket.accountUpdate(result[0]);
+        await this.websocket.orderStatus(result[0]);
       }
-      await this.websocket.accountUpdate(result[1]);
+      await this.websocket.orderStatus(result[1]);
+
+      const userStocks = await this.prisma.user_stocks.findMany({
+        where: {
+          stock_id: data.stockId
+        }
+      });
+      for(let i = 0; i < userStocks.length; i++) {
+        await this.websocket.accountUpdate(userStocks[i].account_id);  
+      }
     } catch (err) {
       if (err instanceof BadRequestException) {
         throw new BadRequestException(err.message);
@@ -266,12 +276,20 @@ export class OrdersService {
       });
 
       await this.websocket.stockUpdate(data.stockId);
+      
       if (result[0]) {
-        await this.websocket.accountUpdate(result[0]);
         await this.websocket.orderStatus(result[0]);
       }
-      await this.websocket.accountUpdate(result[1]);
       await this.websocket.orderStatus(result[1]);
+      
+      const userStocks = await this.prisma.user_stocks.findMany({
+        where: {
+          stock_id: data.stockId
+        }
+      });
+      for(let i = 0; i < userStocks.length; i++) {
+        await this.websocket.accountUpdate(userStocks[i].account_id);  
+      }
     } catch (err) {
       if (err instanceof BadRequestException) {
         throw new BadRequestException(err.message);

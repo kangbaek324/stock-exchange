@@ -68,13 +68,13 @@ class MarketMakerBot {
     // 기준가에서 멀수록 적은 물량
     if (tickDistance <= 5) {
       // 기준가 근처 (±5호가): 큰 물량
-      return Math.floor(Math.random() * 500) + 200 // 200-700
+      return Math.floor(Math.random() * 250) + 100 // 200-700
     } else if (tickDistance <= 15) {
       // 중간 거리 (±6-15호가): 중간 물량
-      return Math.floor(Math.random() * 300) + 100 // 100-400
+      return Math.floor(Math.random() * 150) + 50 // 100-400
     } else {
       // 먼 거리 (±16-30호가): 작은 물량
-      return Math.floor(Math.random() * 100) + 50 // 50-150
+      return Math.floor(Math.random() * 50) + 25 // 50-150
     }
   }
 

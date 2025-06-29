@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Payload } from 'src/auth/interfaces/payload.interface';
 import { GetUser } from 'src/common/decorator/get-user.decorator';
@@ -11,8 +11,13 @@ export class AccountController {
         private readonly accountService: AccountService
     ) {}
 
+    @Get("/")
+    async getMyAccountList(@GetUser() user) {
+        return this.accountService.getMyAccountList(user);
+    }
+
     @Post("/")
-    async accountCreate(@GetUser() user: Payload): Promise<unknown> {
+    async accountCreate(@GetUser() user): Promise<unknown> {
         return this.accountService.createAccount(user);
     }
 }
