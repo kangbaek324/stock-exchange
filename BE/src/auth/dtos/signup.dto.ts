@@ -16,8 +16,7 @@ export class SignupDto {
     })
     @IsString()
     @IsStrongPassword({
-        minLength: 8,
-        minUppercase: 1,
+        minLength: 6,
         minNumbers: 1,
         minSymbols: 1
     })
