@@ -97,8 +97,9 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         if (account.user_id == userId) {
           client.leave("accountId_" + clientInfo.get(client.id).accountId);
           client.join("accountId_" + account.id);
-          clientInfo.set(client.id, { userId: userId, accountId: account.id })
-          this.accountUpdate(account.id)
+          clientInfo.set(client.id, { userId: userId, accountId: account.id });
+          this.accountUpdate(account.id);
+          this.orderStatus(account.id);
         }
         else {
           client.emit('errorCustom', { message: "접근 권한이 없습니다" });
@@ -115,12 +116,13 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       });
 
       if (!basicAccount) {
-        client.emit("errorCustom", { message: "계좌 개설후 이용해주세요" })
+        client.emit("errorCustom", { message: "계좌 개설후 이용해주세요" });
       }
       else {
         clientInfo.set(client.id, { userId: userId, accountId: basicAccount.id });
         client.join("accountId_" + basicAccount.id);
         this.accountUpdate(basicAccount.id);
+        this.orderStatus(basicAccount.id);
       }
     }
   }
@@ -257,8 +259,8 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     };
 
     let executionOrder = await this.prisma.order.findMany({
-      where: { account_id: accountId },
-      orderBy: { created_at: "asc" },
+      where: { account_id: accountId, status: "y" },
+      orderBy: { created_at: "desc" },
       include: {
         stocks: { 
           select: {
@@ -270,8 +272,8 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     });
     
     let noExecutionOrder = await this.prisma.order.findMany({
-      where: { account_id: accountId },
-      orderBy: { created_at: "asc" },
+      where: { account_id: accountId, status: "n" },
+      orderBy: { created_at: "desc" },
       include: {
         stocks: { 
           select: {
@@ -279,7 +281,6 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
           }
         }
       },
-      take: 10
     });
     
     for(let i = 0; i < executionOrder.length; i++) {

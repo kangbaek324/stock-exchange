@@ -1,7 +1,8 @@
 import My from "../components/My";
 import OrderBook from "../components/OrderBook";
-import OrderBox from "../components/OrderBox";
 import StockList from "../components/StockList";
+import BcOrderBox from "../components/BcOrderBox";
+import EcOrderBox from "../components/EcOrderBox";
 import SearchBar from "../components/SearchBar";
 import Header from "../components/Header";
 import { useEffect, useState, useRef, useCallback } from 'react';
@@ -11,17 +12,21 @@ import './stock.css';
 const Stock = () => {
   const [stockData, setStockData] = useState(null);
   const [accountData, setAccountData] = useState(null);
+  const [myOrderData, setMyOrderData] = useState(null);
+  const [selectedAccount, setSelectedAccount] = useState("");
+  const [selectedStock, setSelectedStock] = useState();
   const socketRef = useRef(null);
 
   const changeStock = useCallback((stockId) => {
     if (socketRef.current) {
       socketRef.current.emit("joinStockRoom", stockId);
+      setSelectedStock(stockId);
     }
   }, []);
 
   const changeAccount = useCallback((accountNumber) => {
     if (socketRef.current) {
-      socketRef.current.emit("joinAccountRoom", accountNumber);
+      socketRef.current.emit("joinAccountRoom", parseInt(accountNumber));
     }
   })
 
@@ -32,7 +37,6 @@ const Stock = () => {
     });
 
     socketRef.current.on("connect", () => {
-      console.log("연결됨");
       socketRef.current.emit("joinStockRoom", 1);
       socketRef.current.emit("joinAccountRoom")
     });
@@ -47,6 +51,10 @@ const Stock = () => {
 
     socketRef.current.on("accountUpdated", (data) => {
       setAccountData(data);
+    })
+
+    socketRef.current.on("myOrderUpdated", (data) => {
+      setMyOrderData(data);
     })
 
     return () => {
@@ -66,11 +74,27 @@ const Stock = () => {
           </div>
           <div className="myInfo">
             <div className="my">
-              <My accountData={accountData}/>
+              <My 
+                accountData={accountData} 
+                changeAccount={changeAccount}
+                selectedAccount={selectedAccount}
+                setSelectedAccount={setSelectedAccount}
+                myOrderData={myOrderData}
+                setMyOrderData={setMyOrderData}
+              />
             </div>
             <div className="order">
-              <OrderBox optionName1={"BUY"} optionName2={"SELL"} />
-              <OrderBox optionName1={"EDIT"} optionName2={"CANCEL"} />
+              <BcOrderBox 
+                setSelectedAccount={setSelectedAccount}
+                selectedAccount={selectedAccount}  
+                selectedStock={selectedStock}
+                setSelectedStock={setSelectedStock}
+              />
+              <EcOrderBox
+                setSelectedAccount={setSelectedAccount}
+                selectedAccount={selectedAccount}
+                selectedStock={selectedStock}
+              />
             </div>
           </div>
         </div>

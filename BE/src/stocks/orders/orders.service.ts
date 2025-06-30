@@ -338,22 +338,24 @@ export class OrdersService {
           id : data.orderId
         }
       });
-      
-      const userStock = await this.prisma.user_stocks.findFirst({
-        where :{
-          stock_id : order.stock_id,
-          account_id : order.account_id
-        }
-      })
 
-      await this.prisma.user_stocks.update({
-        where : {
-          id : userStock.id
-        },
-        data : {
-          can_number : userStock.can_number + (order.number - order.match_number) 
-        }
-      });
+      if (order.trading_type == "sell") {        
+        const userStock = await this.prisma.user_stocks.findFirst({
+          where: {
+            stock_id : order.stock_id,
+            account_id : order.account_id
+          }
+        })
+  
+        await this.prisma.user_stocks.update({
+          where : {
+            id : userStock.id
+          },
+          data : {
+            can_number : userStock.can_number + (order.number - order.match_number) 
+          }
+        });
+      }
 
       await this.websocket.stockUpdate(order.stock_id);
       await this.websocket.accountUpdate(order.account_id);

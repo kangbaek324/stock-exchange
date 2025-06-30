@@ -9,6 +9,7 @@ th, td {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-bottom: 10px
 }
 
 #accountInfo {
@@ -32,10 +33,14 @@ th, td {
 
 #stockList {
   overflow-x: auto;
-  scrollbar-width: none;       /* Firefox */
-  -ms-overflow-style: none;    /* IE/Edge */
+  scrollbar-width: none;   
+  -ms-overflow-style: none;
 }
 
 #stockList::-webkit-scrollbar {
-  display: none;               /* Chrome, Safari */
+  display: none;               
+}
+
+hr {
+  color: rgb(175, 175, 175);
 }

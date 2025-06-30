@@ -7,9 +7,19 @@
 
 #menuBar {
     display: flex;
+    align-items: center;
     gap: 10px;
+}
+
+#menuBar p:nth-child(4) {
+    margin-left: auto;
 }
 
 #menu {
     height: 90%;
+    overflow-y: scroll;
+}
+
+#menuBar .selectMenu {
+    border-bottom: 1px solid black;
 }

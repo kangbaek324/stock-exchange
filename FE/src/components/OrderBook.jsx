@@ -219,8 +219,8 @@ const OrderBook = ({ stockData }) => {
       else {
         numberColorStyle = { color: "blue" }
       }
-  
-      let variablePrice = stockData.match[i].price - stockData.previousClose.close
+
+      let variablePrice = stockData.match[i].price - (stockData.previousClose?.close ?? stockData.stockInfo.price)
       let priceColorStyle;
       if (variablePrice > 0) {
         priceColorStyle = { color: "red" }

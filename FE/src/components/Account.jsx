@@ -7,7 +7,6 @@ const Account = ({ accountData }) => {
     let totalEvaluationAmount = 0;
     let totalPnL = 0;
 
-    console.log(accountData)
     for(let i = 0; i < accountData.length - 1; i++) {
         const per = ((accountData[i].nowPrice - accountData[i].average) / accountData[i].average * 100).toFixed(2)
         let perColorStyle;
@@ -23,7 +22,8 @@ const Account = ({ accountData }) => {
 
         const EvaluationAmount = accountData[i].nowPrice * accountData[i].amount;
         const PnL = EvaluationAmount - parseInt(accountData[i].totalBuyAmount);
-
+        const prefix = per > 0 ? "+" : per < 0 ? "" : "-";  
+        
         totalBuyAmount += parseInt(accountData[i].totalBuyAmount);
         totalEvaluationAmount += EvaluationAmount;
         totalPnL += PnL 
@@ -31,7 +31,7 @@ const Account = ({ accountData }) => {
         myStock.push(
             <tr>
                 <td>{accountData[i].name}</td>
-                <td className={perColorStyle}>{per > 0 ? "+" : per < 0 ? "-" : ""}{per}%</td>
+                <td className={perColorStyle}>{prefix}{per}%</td>
                 <td>{PnL}원</td>
                 <td>{accountData[i].average}원</td>
                 <td>{accountData[i].amount}주</td>
@@ -55,6 +55,7 @@ const Account = ({ accountData }) => {
                     <div>예수금<p>{accountData[accountData.length - 1].money}원</p></div>
                 </div>
             </div>
+            <hr />
             <div id="stockList" className="scroll-hidden">
                 <table>
                     <tr>
