@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, UseGuards, Put, Query, Body, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, UseGuards, Put, Query, Body, InternalServerErrorException, BadRequestException, HttpException } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { AuthGuard } from '@nestjs/passport';
 import { BuyDto } from './dtos/buy.dto';
@@ -7,56 +7,20 @@ import { GetUser } from 'src/common/decorator/get-user.decorator';
 import { EditDto } from './dtos/edit.dto';
 import { CancelDto } from './dtos/cancel.dto';
 import { GetOrderDto } from './dtos/get-order.dto';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Ctx, EventPattern, MessagePattern, Payload, RmqContext } from '@nestjs/microservices';
+import { Ctx, MessagePattern, Payload, RmqContext } from '@nestjs/microservices';
+import { OrdersValidationService } from './orders-validation.service';
 
-@ApiTags("stock")
 @Controller()
 export class OrdersController {
-  constructor(private readonly OrdersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly ordersValidationService: OrdersValidationService
+  ) {}
   
-  @ApiOperation({ summary: "주문 조회" })
-  @ApiBearerAuth("access-token")
-  @ApiResponse({
-    status : "2XX", description : `
-    [
-      {
-        "id": 184220,
-        "account_id": 12,
-        "stock_id": 1,
-        "price": 0,
-        "number": 5,
-        "match_number": 5,
-        "order_type": "market",
-        "status": "y",
-        "trading_type": "buy",
-        "created_at": "2025-03-28T11:53:31.468Z",
-        "stocks": {
-          "name": "Nest소프트"
-          }
-          },
-          {
-            "id": 184221,
-            "account_id": 12,
-            "stock_id": 1,
-            "price": 0,
-            "number": 5,
-          "match_number": 5,
-          "order_type": "market",
-          "status": "y",
-          "trading_type": "buy",
-          "created_at": "2025-03-28T11:53:39.111Z",
-          "stocks": {
-            "name": "Nest소프트"
-            }
-            }
-            ]
-            `
-  })
-  @UseGuards(AuthGuard("jwt"))
   @Get("/")
+  @UseGuards(AuthGuard("jwt"))
   async getOrder(@Query() query: GetOrderDto, @GetUser() user) {
-    return this.OrdersService.getOrder(query, user);
+    return this.ordersService.getOrder(query, user);
   }
 
   @MessagePattern("order")
@@ -65,58 +29,57 @@ export class OrdersController {
     const originalMsg = context.getMessage();
 
     try {
-      await this.OrdersService.sendOrder(mqData);
+      await this.ordersService.sendOrder(mqData);
       return {
         statusCode: "201",
         message: "주문이 접수되었습니다"
       };
     } catch(err) {
-      if (err instanceof BadRequestException) {
-        return {
-          status: 400,
-          message: err.message
-        }
-      }
-      else {
-        return {
-          status: 500,
-          message: "서버에 오류가 발생했습니다"
-        }
+      return {
+        statusCode: 500,
+        message: err.message
       }
     } finally {
       channel.ack(originalMsg);
     }
   }
   
-  @ApiOperation({ summary: "주식 매수" })
-  @ApiBearerAuth("access-token")
-  @UseGuards(AuthGuard("jwt"))
   @Post("/buy")
+  @UseGuards(AuthGuard("jwt"))
   async buy(@Body() data: BuyDto, @GetUser() user): Promise<unknown> {
-    return this.OrdersService.sendMQ(data, user, "buy");
+    const resultMessage = await this.ordersValidationService.buySellValidate(data, user, "buy");
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage);
+    }
+    return await this.ordersService.sendMQ(data, user, "buy");
   }
-
-  @ApiOperation({ summary: "주식 매도" })
-  @ApiBearerAuth("access-token")
-  @UseGuards(AuthGuard("jwt"))
   @Post("/sell")
+  @UseGuards(AuthGuard("jwt"))
   async sell(@Body() data: SellDto, @GetUser() user): Promise<unknown> {
-    return this.OrdersService.sendMQ(data, user, "sell");
+    const resultMessage = await this.ordersValidationService.buySellValidate(data, user, "sell");
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage);
+    }
+    return this.ordersService.sendMQ(data, user, "sell");
   }
 
-  @ApiOperation({ summary: "주식 주문 정정" })
-  @ApiBearerAuth("access-token")
-  @UseGuards(AuthGuard("jwt"))
   @Put("/")
+  @UseGuards(AuthGuard("jwt"))
   async edit(@Body() data: EditDto, @GetUser() user): Promise<unknown> {
-    return this.OrdersService.sendMQ(data, user, "edit");
+    const resultMessage = await this.ordersValidationService.editValidate(data, user);
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage);
+    }
+    return this.ordersService.sendMQ(data, user, "edit");
   } 
 
-  @ApiOperation({ summary: "주식 주문 취소" })
-  @ApiBearerAuth("access-token")
-  @UseGuards(AuthGuard("jwt"))
   @Delete("/")
+  @UseGuards(AuthGuard("jwt"))
   async cancel(@Body() data: CancelDto , @GetUser() user): Promise<unknown> {
-    return this.OrdersService.sendMQ(data, user, "cancell");
+    const resultMessage = await this.ordersValidationService.cancelValidate(data, user);
+    if (resultMessage) {
+      throw new BadRequestException(resultMessage);
+    }
+    return this.ordersService.sendMQ(data, user, "cancel");
   }
 }
