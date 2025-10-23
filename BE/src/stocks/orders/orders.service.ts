@@ -103,7 +103,7 @@ export class OrdersService {
           data: {
             account_id: account.id,
             stock_id: data.stockId,
-            price: 0,
+            price: data.price,
             number: data.number,
             order_type: data.orderType,
             trading_type: "buy"
@@ -155,10 +155,10 @@ export class OrdersService {
           data: {
             account_id: account.id,
             stock_id: data.stockId,
-            price: 0,
+            price: data.price,
             number: data.number,
             order_type: data.orderType,
-            trading_type: "buy"
+            trading_type: "sell"
           }
         });
         try {
