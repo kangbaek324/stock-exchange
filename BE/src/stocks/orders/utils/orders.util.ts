@@ -5,53 +5,6 @@ import * as utc from 'dayjs/plugin/utc';
 dayjs.extend(utc);
 
 /**
- * 주문제출
- */
-export async function submitOrder(prisma, submitOrder) {
-    return prisma.order.findUnique({
-        where : { id: submitOrder.id },
-    });
-}
-
-/**
- * 체결할 주문 조회
- */
-export async function findOrder(prisma, data, tradingType) {
-    const stockId = data.stockId;
-    const orderType = data.orderType;
-    const price = data.price;
-
-    let sql = `
-        SELECT id, account_id, price, number, match_number
-        FROM \`order\`
-        WHERE stock_id = ? AND trading_type = ? AND status = 'n'
-    `;
-
-    const params = [stockId];
-
-    if (tradingType === "sell") {
-        params.push("buy");
-        if (orderType === "limit") {
-            sql += ` AND price >= ?`;
-            params.push(price);
-        }
-        sql += ` ORDER BY price DESC, created_at ASC LIMIT 1 FOR UPDATE`;
-    } 
-    else if (tradingType === "buy") {
-        params.push("sell");
-        if (orderType === "limit") {
-            sql += ` AND price <= ?`;
-            params.push(price);
-        }
-        sql += ` ORDER BY price ASC, created_at ASC LIMIT 1 FOR UPDATE`;
-    }
-
-    const [order] = await prisma.$queryRawUnsafe(sql, ...params);
-    return order ?? null;
-}  
-
-
-/**
  * 계좌 업데이트
  * 
  * 보유 수량, 돈 

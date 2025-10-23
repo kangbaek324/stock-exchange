@@ -9,6 +9,7 @@ import { RouterModule } from '@nestjs/core';
 import { InfoModule } from './stocks/info/info.module';
 import { OrdersModule } from './stocks/orders/orders.module';
 import { AccountModule } from './stocks/account/account.module';
+import { RedisModule } from '@liaoliaots/nestjs-redis'
 
 @Module({
   imports: [
@@ -25,6 +26,13 @@ import { AccountModule } from './stocks/account/account.module';
         ]
       }
     ]),
+    RedisModule.forRoot({
+      config: {
+        host: 'localhost',
+        port: 6379,
+        password: '1234'
+      }
+    })
   ],
 })
 

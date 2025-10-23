@@ -4,10 +4,61 @@ import { SellDto } from './dtos/sell.dto';
 import { PrismaClient } from '@prisma/client';
 import * as utils from './utils/orders.util';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
+import { RedisService } from '@liaoliaots/nestjs-redis';
+
+// interface OrderInterface {
+//   account_id: number,
+//   stock_id: number,
+//   price: number,
+//   number: number,
+//   order_type: 'buy' | 'sell',
+//   trading_type: 'market' | 'limit'
+// }
 
 @Injectable()
 export class OrdersExecutionService {
-  constructor(private readonly websocket: WebsocketGateway) {}
+  constructor(
+    private readonly websocket: WebsocketGateway,
+    private readonly redisService: RedisService,
+  ) {}
+
+  // 체결할 주문 검색
+  async findOrder(prisma, data, tradingType) {
+    const stockId = data.stockId;
+    const orderType = data.orderType;
+    const price = data.price;
+
+    // 1. 체결할 주문을 조회한다
+    // 1-1. sell, limt일 경우 buy, price가 더 큰거 선택
+    // 1-2. buy, limit일 경우 sell, price가 낮은거 선택
+
+    let sql = `
+        SELECT id, account_id, price, number, match_number
+        FROM \`order\`
+        WHERE stock_id = ? AND trading_type = ? AND status = 'n'
+    `;
+
+    const params = [stockId];
+
+    if (tradingType === 'sell') {
+      params.push('buy');
+      if (orderType === 'limit') {
+        sql += ` AND price >= ?`;
+        params.push(price);
+      }
+      sql += ` ORDER BY price DESC, created_at ASC LIMIT 1 FOR UPDATE`;
+    } else if (tradingType === 'buy') {
+      params.push('sell');
+      if (orderType === 'limit') {
+        sql += ` AND price <= ?`;
+        params.push(price);
+      }
+      sql += ` ORDER BY price ASC, created_at ASC LIMIT 1 FOR UPDATE`;
+    }
+
+    const [order] = await prisma.$queryRawUnsafe(sql, ...params);
+    return order ?? null;
+  }
 
   async order(
     prisma: PrismaClient,
@@ -17,8 +68,7 @@ export class OrdersExecutionService {
   ): Promise<any> {
     let findOrder;
     while (true) {
-      submitOrder = await utils.submitOrder(prisma, submitOrder);
-      findOrder = await utils.findOrder(prisma, data, tradingType);
+      findOrder = await this.findOrder(prisma, data, tradingType);
 
       if (findOrder) {
         // 체결 가능한 수량
@@ -180,10 +230,15 @@ export class OrdersExecutionService {
           );
           await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 3);
           await utils.stockPriceUpdate(prisma, data, findOrder.price);
+
+          submitOrder.match_number =
+            submitOrder.match_number +
+            (findOrder.number - findOrder.match_number);
         }
       } else {
         // 더이상 체결할 주문이 없거나 / 즉시 체결가능한 주문이 없는경우
-        // 시장가인데 모두 체결 되지 않은 경우 (현재 가격 지정가로 등록)
+
+        // 유저가 가진 주식 조회
         const userStocks = await prisma.user_stocks.findFirst({
           where: { account_id: submitOrder.account_id, stock_id: data.stockId },
         });
@@ -205,6 +260,7 @@ export class OrdersExecutionService {
           submitOrder.number != submitOrder.match_number &&
           submitOrder.order_type == 'market'
         ) {
+          // 현재 주식 가격 조회
           const stockPriceNow = await prisma.stocks.findUnique({
             where: { id: submitOrder.stock_id },
             select: { price: true },
@@ -215,14 +271,14 @@ export class OrdersExecutionService {
             data: { price: stockPriceNow.price },
           });
         }
+
         break;
       }
     }
 
     if (!findOrder) {
       return [null, submitOrder.account_id];
-    }
-    else {
+    } else {
       return [findOrder.account_id, submitOrder.account_id];
     }
   }

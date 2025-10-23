@@ -109,6 +109,7 @@ export class OrdersService {
             trading_type: "buy"
           }
         });
+        
         try {
           result = await this.ordersExecution.order(prisma, data, submitOrder, "buy");
         } catch (error) {
