@@ -20,6 +20,8 @@ export class OrdersExecutionService {
       submitOrder = await utils.submitOrder(prisma, submitOrder);
       findOrder = await utils.findOrder(prisma, data, tradingType);
 
+      console.log(submitOrder);
+
       if (findOrder) {
         // 체결 가능한 수량
         const submitOrderNumber = submitOrder.number - submitOrder.match_number;

@@ -103,12 +103,13 @@ export class OrdersService {
           data: {
             account_id: account.id,
             stock_id: data.stockId,
-            price: 0,
+            price: data.price,
             number: data.number,
             order_type: data.orderType,
             trading_type: "buy"
           }
         });
+
         try {
           result = await this.ordersExecution.order(prisma, data, submitOrder, "buy");
         } catch (error) {
@@ -155,12 +156,13 @@ export class OrdersService {
           data: {
             account_id: account.id,
             stock_id: data.stockId,
-            price: 0,
+            price: data.price,
             number: data.number,
             order_type: data.orderType,
-            trading_type: "buy"
+            trading_type: "sell"
           }
         });
+
         try {
           result = await this.ordersExecution.order(prisma, data, submitOrder, "sell");
         } catch (error) {
@@ -185,9 +187,11 @@ export class OrdersService {
           stock_id: data.stockId
         }
       });
+      
       for(let i = 0; i < userStocks.length; i++) {
         await this.websocket.accountUpdate(userStocks[i].account_id);  
       }
+
     } catch(err) {
       console.error("웹소켓 전송오류" + err);
     }
