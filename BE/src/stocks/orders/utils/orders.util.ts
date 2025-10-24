@@ -5,6 +5,17 @@ import * as utc from 'dayjs/plugin/utc';
 dayjs.extend(utc);
 
 /**
+ * 
+ * @param order 
+ * @returns Json으로 변환된 order을 반환
+ */
+export function orderToJson(order) {
+     return JSON.stringify(order, (_, value) =>
+        typeof value === 'bigint' ? value.toString() : value,
+    );
+}
+
+/**
  * 계좌 업데이트
  * 
  * 보유 수량, 돈 

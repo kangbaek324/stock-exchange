@@ -5,72 +5,116 @@ import { PrismaClient } from '@prisma/client';
 import * as utils from './utils/orders.util';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { RedisService } from '@liaoliaots/nestjs-redis';
-
-// interface OrderInterface {
-//   account_id: number,
-//   stock_id: number,
-//   price: number,
-//   number: number,
-//   order_type: 'buy' | 'sell',
-//   trading_type: 'market' | 'limit'
-// }
+import Redis from 'ioredis';
 
 @Injectable()
 export class OrdersExecutionService {
+  private readonly redis: Redis | null;
   constructor(
     private readonly websocket: WebsocketGateway,
     private readonly redisService: RedisService,
-  ) {}
+  ) {
+    this.redis = this.redisService.getOrThrow();
+  }
 
   // 체결할 주문 검색
-  async findOrder(prisma, data, tradingType) {
+  async findOrder(prisma, data, tradingType, searchCount) {
     const stockId = data.stockId;
     const orderType = data.orderType;
     const price = data.price;
 
-    // 1. 체결할 주문을 조회한다
-    // 1-1. sell, limt일 경우 buy, price가 더 큰거 선택
-    // 1-2. buy, limit일 경우 sell, price가 낮은거 선택
+    let redisOrder;
 
-    let sql = `
-        SELECT id, account_id, price, number, match_number
-        FROM \`order\`
-        WHERE stock_id = ? AND trading_type = ? AND status = 'n'
-    `;
+    // Redis 조회
+    switch (tradingType) {
+      case 'buy': {
+        redisOrder = await this.redis.zrange('orderbook:1:sell', 0, -1, 'WITHSCORES'); // 낮은 가격 먼저
+        if (!redisOrder[searchCount]) break;
 
-    const params = [stockId];
+        const rs = JSON.parse(redisOrder[searchCount]);
+        rs.match_number = BigInt(rs.match_number);
+        rs.number = BigInt(rs.number);
 
-    if (tradingType === 'sell') {
-      params.push('buy');
-      if (orderType === 'limit') {
-        sql += ` AND price >= ?`;
-        params.push(price);
+        if (rs.price > price) return null;
+
+        return [rs, redisOrder];
       }
-      sql += ` ORDER BY price DESC, created_at ASC LIMIT 1 FOR UPDATE`;
-    } else if (tradingType === 'buy') {
-      params.push('sell');
-      if (orderType === 'limit') {
-        sql += ` AND price <= ?`;
-        params.push(price);
+
+      case 'sell': {
+        redisOrder = await this.redis.zrevrange('orderbook:1:buy', 0, -1, 'WITHSCORES'); // 높은 가격 먼저
+        if (!redisOrder[searchCount]) break;
+        
+        const rs = JSON.parse(redisOrder[searchCount]);
+        rs.match_number = BigInt(rs.match_number);
+        rs.number = BigInt(rs.number);
+
+        if (rs.price < price) return null;
+
+        return [rs, redisOrder];
       }
-      sql += ` ORDER BY price ASC, created_at ASC LIMIT 1 FOR UPDATE`;
     }
 
-    const [order] = await prisma.$queryRawUnsafe(sql, ...params);
-    return order ?? null;
+    // 없을경우 DB 직접 조회
+    if (!redisOrder[searchCount]) {
+      let sql = `
+          SELECT id, account_id, price, number, match_number
+          FROM \`order\`
+          WHERE stock_id = ? AND trading_type = ? AND status = 'n'
+      `;
+  
+      const params = [stockId];
+      
+      switch (tradingType) {
+        case 'buy': {
+          params.push('sell');
+          if (orderType === 'limit') {
+            sql += ` AND price <= ?`;
+            params.push(price);
+          }
+          sql += ` ORDER BY price ASC, created_at ASC LIMIT 1 FOR UPDATE`;
+
+          break;
+        }
+
+        case 'sell': {
+          params.push('buy');
+          if (orderType === 'limit') {
+            sql += ` AND price >= ?`;
+            params.push(price);
+          }
+          sql += ` ORDER BY price DESC, created_at ASC LIMIT 1 FOR UPDATE`;
+
+          break;
+        }
+      }
+  
+      const [order] = await prisma.$queryRawUnsafe(sql, ...params);
+
+      const returnValue = [order, 1];
+      return returnValue ?? null;
+    }
   }
 
   async order(
     prisma: PrismaClient,
     data: BuyDto | SellDto,
     submitOrder,
+    submitOrderScore: number,
     tradingType,
   ): Promise<any> {
-    let findOrder;
-    while (true) {
-      findOrder = await this.findOrder(prisma, data, tradingType);
+    let findOrder, findOrderScore;
+    let searchCount = 0;
+    const orderToDelete = {
+      sell: [],
+      buy: [],
+    };
 
-      if (findOrder) {
+    while (true) {
+      const findOrderOrigin = await this.findOrder(prisma, data, tradingType, searchCount);
+
+      if (findOrderOrigin[0]) {
+        findOrder = findOrderOrigin[0];
+        findOrderScore = findOrderOrigin[1]; // score 조회방법: searchCount + 1
         // 체결 가능한 수량
         const submitOrderNumber = submitOrder.number - submitOrder.match_number;
         const findOrderNumber = findOrder.number - findOrder.match_number;
@@ -97,6 +141,9 @@ export class OrdersExecutionService {
               'decrease',
               true,
             );
+
+            orderToDelete.buy.push(submitOrderScore);
+            orderToDelete.sell.push(findOrderScore[searchCount + 1]);
           } else {
             await utils.accountUpdate(
               prisma,
@@ -116,6 +163,9 @@ export class OrdersExecutionService {
               false,
               findOrder.price,
             );
+
+            orderToDelete.buy.push(findOrderScore[searchCount + 1]);
+            orderToDelete.sell.push(submitOrderScore);
           }
           await utils.orderCompleteUpdate(prisma, order);
           await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 1);
@@ -147,6 +197,15 @@ export class OrdersExecutionService {
               'decrease',
               true,
             );
+
+            const score = findOrderScore[searchCount + 1];
+            const redisKey = `orderbook:${data.stockId}:sell`;
+            findOrder.match_number = findOrder.match_number; + (submitOrder.number - submitOrder.match_number);
+
+            await this.redis.zremrangebyscore(redisKey, score, score);
+            await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
+
+            orderToDelete.buy.push(submitOrderScore);
           } else {
             await utils.accountUpdate(
               prisma,
@@ -166,6 +225,15 @@ export class OrdersExecutionService {
               false,
               findOrder.price,
             );
+
+            const score = findOrderScore[searchCount + 1];
+            const redisKey = `orderbook:${data.stockId}:buy`;
+            findOrder.match_number = findOrder.match_number; + (submitOrder.number - submitOrder.match_number);
+
+            await this.redis.zremrangebyscore(redisKey, score, score);
+            await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
+
+            orderToDelete.sell.push(submitOrderScore);
           }
           await utils.orderCompleteUpdate(prisma, order, submitOrder.number);
           await utils.orderMatchAndRemainderUpdate(
@@ -182,6 +250,7 @@ export class OrdersExecutionService {
           break;
         } else if (submitOrderNumber > findOrderNumber) {
           const order = [findOrder];
+
           // 잔고 수정
           if (tradingType == 'buy') {
             await utils.accountUpdate(
@@ -202,6 +271,8 @@ export class OrdersExecutionService {
               'decrease',
               true,
             );
+
+            orderToDelete.sell.push(findOrderScore[searchCount + 1]);
           } else {
             await utils.accountUpdate(
               prisma,
@@ -221,7 +292,10 @@ export class OrdersExecutionService {
               false,
               findOrder.price,
             );
+
+            orderToDelete.buy.push(findOrderScore[searchCount + 1]);
           }
+
           await utils.orderCompleteUpdate(prisma, order, findOrder.number);
           await utils.orderMatchAndRemainderUpdate(
             prisma,
@@ -234,6 +308,8 @@ export class OrdersExecutionService {
           submitOrder.match_number =
             submitOrder.match_number +
             (findOrder.number - findOrder.match_number);
+
+          searchCount = searchCount + 2;
         }
       } else {
         // 더이상 체결할 주문이 없거나 / 즉시 체결가능한 주문이 없는경우
@@ -276,10 +352,6 @@ export class OrdersExecutionService {
       }
     }
 
-    if (!findOrder) {
-      return [null, submitOrder.account_id];
-    } else {
-      return [findOrder.account_id, submitOrder.account_id];
-    }
+    return orderToDelete;
   }
 }
