@@ -55,44 +55,42 @@ export class OrdersExecutionService {
     }
 
     // 없을경우 DB 직접 조회
-    if (!redisOrder[searchCount]) {
-      let sql = `
-          SELECT id, account_id, price, number, match_number
-          FROM \`order\`
-          WHERE stock_id = ? AND trading_type = ? AND status = 'n'
-      `;
-  
-      const params = [stockId];
-      
-      switch (tradingType) {
-        case 'buy': {
-          params.push('sell');
-          if (orderType === 'limit') {
-            sql += ` AND price <= ?`;
-            params.push(price);
-          }
-          sql += ` ORDER BY price ASC, created_at ASC LIMIT 1 FOR UPDATE`;
+    let sql = `
+        SELECT id, account_id, price, number, match_number
+        FROM \`order\`
+        WHERE stock_id = ? AND trading_type = ? AND status = 'n'
+    `;
 
-          break;
+    const params = [stockId];
+    
+    switch (tradingType) {
+      case 'buy': {
+        params.push('sell');
+        if (orderType === 'limit') {
+          sql += ` AND price <= ?`;
+          params.push(price);
         }
+        sql += ` ORDER BY price ASC, created_at ASC LIMIT 1 FOR UPDATE`;
 
-        case 'sell': {
-          params.push('buy');
-          if (orderType === 'limit') {
-            sql += ` AND price >= ?`;
-            params.push(price);
-          }
-          sql += ` ORDER BY price DESC, created_at ASC LIMIT 1 FOR UPDATE`;
-
-          break;
-        }
+        break;
       }
-  
-      const [order] = await prisma.$queryRawUnsafe(sql, ...params);
 
-      const returnValue = [order, 1];
-      return returnValue ?? null;
+      case 'sell': {
+        params.push('buy');
+        if (orderType === 'limit') {
+          sql += ` AND price >= ?`;
+          params.push(price);
+        }
+        sql += ` ORDER BY price DESC, created_at ASC LIMIT 1 FOR UPDATE`;
+
+        break;
+      }
     }
+
+    const [order] = await prisma.$queryRawUnsafe(sql, ...params);
+
+    const returnValue = [order, 0];
+    return returnValue ?? null;
   }
 
   async order(
@@ -108,13 +106,15 @@ export class OrdersExecutionService {
       sell: [],
       buy: [],
     };
+    let a = null;
 
     while (true) {
       const findOrderOrigin = await this.findOrder(prisma, data, tradingType, searchCount);
 
-      if (findOrderOrigin[0]) {
+      if (findOrderOrigin !== null && findOrderOrigin[0]) {
         findOrder = findOrderOrigin[0];
         findOrderScore = findOrderOrigin[1]; // score 조회방법: searchCount + 1
+
         // 체결 가능한 수량
         const submitOrderNumber = submitOrder.number - submitOrder.match_number;
         const findOrderNumber = findOrder.number - findOrder.match_number;
@@ -200,7 +200,7 @@ export class OrdersExecutionService {
 
             const score = findOrderScore[searchCount + 1];
             const redisKey = `orderbook:${data.stockId}:sell`;
-            findOrder.match_number = findOrder.match_number; + (submitOrder.number - submitOrder.match_number);
+            findOrder.match_number = findOrder.match_number + (submitOrder.number - submitOrder.match_number);
 
             await this.redis.zremrangebyscore(redisKey, score, score);
             await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
@@ -228,7 +228,7 @@ export class OrdersExecutionService {
 
             const score = findOrderScore[searchCount + 1];
             const redisKey = `orderbook:${data.stockId}:buy`;
-            findOrder.match_number = findOrder.match_number; + (submitOrder.number - submitOrder.match_number);
+            findOrder.match_number = findOrder.match_number + (submitOrder.number - submitOrder.match_number);
 
             await this.redis.zremrangebyscore(redisKey, score, score);
             await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
@@ -250,6 +250,7 @@ export class OrdersExecutionService {
           break;
         } else if (submitOrderNumber > findOrderNumber) {
           const order = [findOrder];
+          console.log(searchCount);
 
           // 잔고 수정
           if (tradingType == 'buy') {
@@ -295,6 +296,8 @@ export class OrdersExecutionService {
 
             orderToDelete.buy.push(findOrderScore[searchCount + 1]);
           }
+
+          console.log(findOrderScore[searchCount + 1]);
 
           await utils.orderCompleteUpdate(prisma, order, findOrder.number);
           await utils.orderMatchAndRemainderUpdate(
@@ -351,7 +354,7 @@ export class OrdersExecutionService {
         break;
       }
     }
-
+    
     return orderToDelete;
   }
 }

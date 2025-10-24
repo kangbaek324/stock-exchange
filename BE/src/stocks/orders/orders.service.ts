@@ -120,13 +120,13 @@ export class OrdersService {
         });
 
         // Redis 주문 저장
-        const unixTime = Math.floor(Date.now() / 1000);
+        const unixTime = Date.now(); // 밀리초 단위
 
         jsonOrder = JSON.stringify(submitOrder, (_, value) =>
           typeof value === 'bigint' ? value.toString() : value,
         );
 
-        const score = data.price * 1_000_000_000 - unixTime;
+        const score = data.price * 1_000_000_000_000 + unixTime;
         await this.redis.zadd(
           `orderbook:${data.stockId}:buy`,
           score,
@@ -201,13 +201,13 @@ export class OrdersService {
         });
 
         // Redis 주문 저장
-        const unixTime = Math.floor(Date.now() / 1000);
+        const unixTime = Date.now(); // 밀리초 단위
 
         jsonOrder = JSON.stringify(submitOrder, (_, value) =>
           typeof value === 'bigint' ? value.toString() : value,
         );
 
-        const score = data.price * 1_000_000_000 + unixTime;
+        const score = data.price * 1_000_000_000_000 + unixTime;
         await this.redis.zadd(
           `orderbook:${data.stockId}:sell`,
           score,
