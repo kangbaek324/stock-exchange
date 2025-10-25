@@ -12,6 +12,7 @@ import { PrismaClient } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { RedisService } from '@liaoliaots/nestjs-redis';
 import Redis from 'ioredis';
+import { orderToJson } from './utils/orders.util';
 
 // @TODO Redis가 죽었을때 상황을 처리해야함
 @Injectable()
@@ -49,9 +50,9 @@ export class OrdersService {
     } else if (mqData.type === 'sell') {
       return await this.sell(mqData.data, mqData.user);
     } else if (mqData.type === 'cancel') {
-      return await this.cancel(mqData.data, mqData.user);
+      return await this.cancel(mqData.data);
     } else if (mqData.type === 'edit') {
-      return await this.edit(mqData.data, mqData.user);
+      return await this.edit(mqData.data);
     }
   }
 
@@ -97,6 +98,9 @@ export class OrdersService {
     }
   }
 
+  /**
+   * @TODO Redis 롤백 구현 필요
+   */
   async buy(data: BuyDto, user) {
     let result;
     let jsonOrder;
@@ -106,7 +110,7 @@ export class OrdersService {
       await this.prisma.$transaction(async (prisma: PrismaClient) => {
         const account = await prisma.accounts.findUnique({
           where: { account_number: data.accountNumber },
-          select: { id: true }
+          select: { id: true },
         });
 
         if (data.orderType == 'market') data.price = 0;
@@ -125,12 +129,10 @@ export class OrdersService {
 
         // Redis 주문 저장
         const unixTime = Date.now(); // 밀리초 단위
-
-        jsonOrder = JSON.stringify(submitOrder, (_, value) =>
-          typeof value === 'bigint' ? value.toString() : value,
-        );
-
         const score = data.price * 1_000_000_000_000 + unixTime;
+
+        jsonOrder = orderToJson(submitOrder);
+
         await this.redis.zadd(
           `orderbook:${data.stockId}:buy`,
           score,
@@ -142,16 +144,24 @@ export class OrdersService {
           prisma,
           data,
           submitOrder,
-          score
+          score,
         );
 
         // 처리된 주문 Redis에서 삭제
         for (const sellScore of result.sell) {
-          await this.redis.zremrangebyscore(`orderbook:${data.stockId}:sell`, sellScore, sellScore);
+          await this.redis.zremrangebyscore(
+            `orderbook:${data.stockId}:sell`,
+            sellScore,
+            sellScore,
+          );
         }
-    
+
         for (const buyScore of result.buy) {
-          await this.redis.zremrangebyscore(`orderbook:${data.stockId}:buy`, buyScore, buyScore);
+          await this.redis.zremrangebyscore(
+            `orderbook:${data.stockId}:buy`,
+            buyScore,
+            buyScore,
+          );
         }
       });
     } catch (err) {
@@ -182,6 +192,9 @@ export class OrdersService {
     }
   }
 
+  /**
+   * @TODO Redis 롤백 구현 필요
+   */
   async sell(data: SellDto, user) {
     let result;
     let jsonOrder;
@@ -191,7 +204,7 @@ export class OrdersService {
       await this.prisma.$transaction(async (prisma: PrismaClient) => {
         const account = await prisma.accounts.findUnique({
           where: { account_number: data.accountNumber },
-          select: { id: true }
+          select: { id: true },
         });
 
         if (data.orderType == 'market') data.price = 0;
@@ -210,12 +223,10 @@ export class OrdersService {
 
         // Redis 주문 저장
         const unixTime = Date.now(); // 밀리초 단위
-
-        jsonOrder = JSON.stringify(submitOrder, (_, value) =>
-          typeof value === 'bigint' ? value.toString() : value,
-        );
-
         const score = data.price * 1_000_000_000_000 + unixTime;
+
+        jsonOrder = orderToJson(submitOrder);
+
         await this.redis.zadd(
           `orderbook:${data.stockId}:sell`,
           score,
@@ -227,16 +238,24 @@ export class OrdersService {
           prisma,
           data,
           submitOrder,
-          score
+          score,
         );
 
         // 처리된 주문 Redis에서 삭제
         for (const score of result.sell) {
-          await this.redis.zremrangebyscore(`orderbook:${data.stockId}:sell`, score, score);
+          await this.redis.zremrangebyscore(
+            `orderbook:${data.stockId}:sell`,
+            score,
+            score,
+          );
         }
-    
+
         for (const score of result.buy) {
-          await this.redis.zremrangebyscore(`orderbook:${data.stockId}:buy`, score, score);
+          await this.redis.zremrangebyscore(
+            `orderbook:${data.stockId}:buy`,
+            score,
+            score,
+          );
         }
       });
     } catch (err) {
@@ -267,14 +286,30 @@ export class OrdersService {
     }
   }
 
-  // edit과 cancel redis 적용하기
+  /**
+   * @TODO
+   * Redis, DB중 하나라도 실패시 롤백 하는 로직 추가 필요
+   */
+  async edit(data: EditDto) {
+    let order, redisKey, 
+    beforeScore, newScore, 
+    beforeOrder, newOrder;
 
-  async edit(data: EditDto, user) {
-    let result;
-
-    // 주문 정정
     try {
-      result = await this.prisma.order.update({
+      // 기존 주문 조회
+      order = await this.prisma.order.findUnique({
+        where: { id: data.orderId },
+      });
+
+      redisKey =
+        order.trading_type == 'buy'
+          ? `orderbook:${order.stock_id}:buy`
+          : `orderbook:${order.stock_id}:sell`;
+
+      beforeOrder = orderToJson(order);
+
+      // 주문 정정 (DB)
+      order = await this.prisma.order.update({
         data: {
           price: data.price,
         },
@@ -282,6 +317,16 @@ export class OrdersService {
           id: data.orderId,
         },
       });
+
+      newOrder = orderToJson(order);
+
+      // 주문 정정 (Redis)
+      beforeScore = await this.redis.zscore(redisKey, beforeOrder);
+
+      const unixTime = Date.now(); // 밀리초 단위
+      newScore = data.price * 1_000_000_000_000 + unixTime;
+      await this.redis.zremrangebyscore(redisKey, beforeScore, beforeScore);
+      await this.redis.zadd(redisKey, newScore, newOrder);
     } catch (err) {
       console.error(err);
       throw new InternalServerErrorException('주문 처리중 오류가 발생했습니다');
@@ -289,20 +334,39 @@ export class OrdersService {
 
     // 웹소켓 전송
     try {
-      await this.websocket.stockUpdate(result.stock_id);
-      await this.websocket.accountUpdate(result.account_id);
-      await this.websocket.orderStatus(result.account_id);
+      await this.websocket.stockUpdate(order.stock_id);
+      await this.websocket.accountUpdate(order.account_id);
+      await this.websocket.orderStatus(order.account_id);
     } catch (err) {
       console.error('웹소켓 전송오류' + err);
     }
   }
 
-  async cancel(data: CancelDto, user) {
+  /**
+   * @TODO
+   * Redis 롤백 구현 필요
+   */
+  async cancel(data: CancelDto) {
     let order;
 
     // 취소 주문
     try {
       await this.prisma.$transaction(async () => {
+        // 주문 조회
+        order = await this.prisma.order.findFirst({
+          where: { id: data.orderId },
+        });
+
+        // 주문 취소 (Redis)
+        const redisKey =
+          order.trading_type == 'buy'
+            ? `orderbook:${order.stock_id}:buy`
+            : `orderbook:${order.stock_id}:sell`;
+
+        const jsonOrder = orderToJson(order);
+        await this.redis.zrem(redisKey, jsonOrder);
+
+        // 주문 취소 (DB)
         order = await this.prisma.order.update({
           data: {
             status: 'c',
@@ -312,6 +376,7 @@ export class OrdersService {
           },
         });
 
+        // 매도 주문일 경우 가능수량 수정
         if (order.trading_type == 'sell') {
           const userStock = await this.prisma.user_stocks.findFirst({
             where: {
