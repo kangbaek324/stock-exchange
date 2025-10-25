@@ -35,7 +35,7 @@ export class OrdersExecutionService {
         rs.match_number = BigInt(rs.match_number);
         rs.number = BigInt(rs.number);
 
-        if (rs.price > price) return null;
+        if (rs.price > price && orderType == "limit") return null;
 
         return [rs, redisOrder];
       }
@@ -48,7 +48,7 @@ export class OrdersExecutionService {
         rs.match_number = BigInt(rs.match_number);
         rs.number = BigInt(rs.number);
 
-        if (rs.price < price) return null;
+        if (rs.price < price && orderType == "limit") return null;
 
         return [rs, redisOrder];
       }
@@ -98,15 +98,14 @@ export class OrdersExecutionService {
     data: BuyDto | SellDto,
     submitOrder,
     submitOrderScore: number,
-    tradingType,
   ): Promise<any> {
+    const tradingType = submitOrder.trading_type;
     let findOrder, findOrderScore;
     let searchCount = 0;
     const orderToDelete = {
       sell: [],
       buy: [],
     };
-    let a = null;
 
     while (true) {
       const findOrderOrigin = await this.findOrder(prisma, data, tradingType, searchCount);
@@ -177,6 +176,8 @@ export class OrdersExecutionService {
           break;
         } else if (submitOrderNumber < findOrderNumber) {
           const order = [submitOrder];
+          let redisKey;
+
           // 잔고 수정
           if (tradingType == 'buy') {
             await utils.accountUpdate(
@@ -198,13 +199,7 @@ export class OrdersExecutionService {
               true,
             );
 
-            const score = findOrderScore[searchCount + 1];
-            const redisKey = `orderbook:${data.stockId}:sell`;
-            findOrder.match_number = findOrder.match_number + (submitOrder.number - submitOrder.match_number);
-
-            await this.redis.zremrangebyscore(redisKey, score, score);
-            await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
-
+            redisKey = `orderbook:${data.stockId}:sell`;
             orderToDelete.buy.push(submitOrderScore);
           } else {
             await utils.accountUpdate(
@@ -226,15 +221,10 @@ export class OrdersExecutionService {
               findOrder.price,
             );
 
-            const score = findOrderScore[searchCount + 1];
-            const redisKey = `orderbook:${data.stockId}:buy`;
-            findOrder.match_number = findOrder.match_number + (submitOrder.number - submitOrder.match_number);
-
-            await this.redis.zremrangebyscore(redisKey, score, score);
-            await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
-
+            redisKey = `orderbook:${data.stockId}:buy`;
             orderToDelete.sell.push(submitOrderScore);
           }
+
           await utils.orderCompleteUpdate(prisma, order, submitOrder.number);
           await utils.orderMatchAndRemainderUpdate(
             prisma,
@@ -242,15 +232,19 @@ export class OrdersExecutionService {
             submitOrder,
           );
           await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 2);
-          await utils.stockPriceUpdate(prisma, data, findOrder.price);
+          const score = findOrderScore[searchCount + 1];
+          findOrder.match_number = findOrder.match_number + (submitOrder.number - submitOrder.match_number);
+          
+          await this.redis.zremrangebyscore(redisKey, score, score);
+          await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
 
+          await utils.stockPriceUpdate(prisma, data, findOrder.price);
           await this.websocket.accountUpdate(submitOrder.account_id);
           await this.websocket.accountUpdate(findOrder.account_id);
 
           break;
         } else if (submitOrderNumber > findOrderNumber) {
           const order = [findOrder];
-          console.log(searchCount);
 
           // 잔고 수정
           if (tradingType == 'buy') {
@@ -297,8 +291,6 @@ export class OrdersExecutionService {
             orderToDelete.buy.push(findOrderScore[searchCount + 1]);
           }
 
-          console.log(findOrderScore[searchCount + 1]);
-
           await utils.orderCompleteUpdate(prisma, order, findOrder.number);
           await utils.orderMatchAndRemainderUpdate(
             prisma,
@@ -322,7 +314,31 @@ export class OrdersExecutionService {
           where: { account_id: submitOrder.account_id, stock_id: data.stockId },
         });
 
-        // 매도주문 -> 체결할 주문이 없음
+        // 시장가 주문중 미체결이 있는 경우
+        if (
+          submitOrder.number != submitOrder.match_number &&
+          submitOrder.order_type == 'market'
+        ) {
+          // DB 취소
+          await prisma.order.update({
+            where: { id: submitOrder.id },
+            data: { 
+              status: 'c'
+            },
+          });
+
+          // Redis 취소
+          const redisKey =
+            tradingType == 'buy'
+              ? `orderbook:${data.stockId}:buy`
+              : `orderbook:${data.stockId}:sell`;
+              
+          await this.redis.zremrangebyscore(redisKey, submitOrderScore, submitOrderScore);
+
+          break;
+        }
+
+        // 매도 주문시 가능수량 업데이트
         if (tradingType == 'sell') {
           await prisma.user_stocks.update({
             where: { id: userStocks.id },
@@ -333,23 +349,16 @@ export class OrdersExecutionService {
             },
           });
         }
+        
+        // 지정가 매매에 대해서 남은 수량 Redis 업데이트
+        const redisKey =
+          tradingType == 'buy'
+            ? `orderbook:${data.stockId}:buy`
+            : `orderbook:${data.stockId}:sell`;
 
-        // 시장가 주문 -> 일부체결시 지정가로 전환
-        if (
-          submitOrder.number != submitOrder.match_number &&
-          submitOrder.order_type == 'market'
-        ) {
-          // 현재 주식 가격 조회
-          const stockPriceNow = await prisma.stocks.findUnique({
-            where: { id: submitOrder.stock_id },
-            select: { price: true },
-          });
-
-          await prisma.order.update({
-            where: { id: submitOrder.id },
-            data: { price: stockPriceNow.price },
-          });
-        }
+        // Redis 남은 주문 업데이트
+        await this.redis.zremrangebyscore(redisKey, submitOrderScore, submitOrderScore);
+        await this.redis.zadd(redisKey, submitOrderScore, utils.orderToJson(submitOrder));
 
         break;
       }

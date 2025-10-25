@@ -5,11 +5,11 @@ class BuyBot {
   constructor() {
     this.config = {
       accessToken:
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjMsInVzZXJuYW1lIjoiYWRtaW4zIiwiaWF0IjoxNzUwOTUzMzA3fQ.i17g11m4VTXl8teoS87Hx1BvA_0vUmduN16SquoCcfU",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInVzZXJuYW1lIjoiYWRtaW4yIiwiaWF0IjoxNzYxMzI1ODA2fQ.UxnfM2lHyhHRdL4LYFHAa3nKo1p-AuRo_mhS-0ilkss",
       accountNumber: 1002,
       baseUrl: "http://localhost:3000",
       socketUrl: "http://localhost:3003/stock",
-    }
+    };
 
     this.socket = null
     this.currentData = null

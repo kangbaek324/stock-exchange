@@ -106,8 +106,12 @@ export class OrdersService {
       await this.prisma.$transaction(async (prisma: PrismaClient) => {
         const account = await prisma.accounts.findUnique({
           where: { account_number: data.accountNumber },
+          select: { id: true }
         });
 
+        if (data.orderType == 'market') data.price = 0;
+
+        // 주문 생성
         let submitOrder = await prisma.order.create({
           data: {
             account_id: account.id,
@@ -133,28 +137,28 @@ export class OrdersService {
           jsonOrder,
         );
 
+        // 체결 가능 주문 탐색
         result = await this.ordersExecution.order(
           prisma,
           data,
           submitOrder,
-          score,
-          'buy',
+          score
         );
+
+        // 처리된 주문 Redis에서 삭제
+        for (const sellScore of result.sell) {
+          await this.redis.zremrangebyscore(`orderbook:${data.stockId}:sell`, sellScore, sellScore);
+        }
+    
+        for (const buyScore of result.buy) {
+          await this.redis.zremrangebyscore(`orderbook:${data.stockId}:buy`, buyScore, buyScore);
+        }
       });
     } catch (err) {
       await this.redis.zrem(`orderbook:${data.stockId}:buy`, jsonOrder);
 
       console.error(err);
       throw new InternalServerErrorException('주문 처리중 오류가 발생했습니다');
-    }
-
-    // 처리된 주문 Redis에서 삭제
-    for (const score of result.sell) {
-      await this.redis.zremrangebyscore(`orderbook:${data.stockId}:sell`, score, score);
-    }
-
-    for (const score of result.buy) {
-      await this.redis.zremrangebyscore(`orderbook:${data.stockId}:buy`, score, score);
     }
 
     // 웹 소켓 전송
@@ -187,8 +191,12 @@ export class OrdersService {
       await this.prisma.$transaction(async (prisma: PrismaClient) => {
         const account = await prisma.accounts.findUnique({
           where: { account_number: data.accountNumber },
+          select: { id: true }
         });
 
+        if (data.orderType == 'market') data.price = 0;
+
+        // 주문 생성
         let submitOrder = await prisma.order.create({
           data: {
             account_id: account.id,
@@ -214,28 +222,28 @@ export class OrdersService {
           jsonOrder,
         );
 
+        // 체결 가능 주문 탐색
         result = await this.ordersExecution.order(
           prisma,
           data,
           submitOrder,
-          score,
-          'sell',
+          score
         );
+
+        // 처리된 주문 Redis에서 삭제
+        for (const score of result.sell) {
+          await this.redis.zremrangebyscore(`orderbook:${data.stockId}:sell`, score, score);
+        }
+    
+        for (const score of result.buy) {
+          await this.redis.zremrangebyscore(`orderbook:${data.stockId}:buy`, score, score);
+        }
       });
     } catch (err) {
       await this.redis.zrem(`orderbook:${data.stockId}:sell`, jsonOrder);
 
       console.error(err);
       throw new InternalServerErrorException('주문 처리중 오류가 발생했습니다');
-    }
-
-    // 처리된 주문 Redis에서 삭제
-    for (const score of result.sell) {
-      await this.redis.zremrangebyscore(`orderbook:${data.stockId}:sell`, score, score);
-    }
-
-    for (const score of result.buy) {
-      await this.redis.zremrangebyscore(`orderbook:${data.stockId}:buy`, score, score);
     }
 
     // 웹소켓 전송
@@ -258,6 +266,8 @@ export class OrdersService {
       console.error('웹소켓 전송오류' + err);
     }
   }
+
+  // edit과 cancel redis 적용하기
 
   async edit(data: EditDto, user) {
     let result;
