@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BuyDto } from './dtos/buy.dto';
 import { SellDto } from './dtos/sell.dto';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, TradingType } from '@prisma/client';
 import * as utils from './utils/orders.util';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { RedisService } from '@liaoliaots/nestjs-redis';
@@ -18,7 +18,7 @@ export class OrdersExecutionService {
   }
 
   // 체결할 주문 검색
-  async findOrder(prisma, data, tradingType, searchCount) {
+  async findOrder(prisma: PrismaClient, data: BuyDto, tradingType: TradingType, searchCount: number) {
     const stockId = data.stockId;
     const orderType = data.orderType;
     const price = data.price;
@@ -61,7 +61,7 @@ export class OrdersExecutionService {
         WHERE stock_id = ? AND trading_type = ? AND status = 'n'
     `;
 
-    const params = [stockId];
+    const params: (number | string)[] = [stockId];
     
     switch (tradingType) {
       case 'buy': {
@@ -87,7 +87,7 @@ export class OrdersExecutionService {
       }
     }
 
-    const [order] = await prisma.$queryRawUnsafe(sql, ...params);
+    const [order] = await prisma.$queryRawUnsafe(sql, ...params) as any[];
 
     const returnValue = [order, 0];
     return returnValue ?? null;
@@ -98,10 +98,9 @@ export class OrdersExecutionService {
     data: BuyDto | SellDto,
     submitOrder,
     submitOrderScore: number,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const tradingType = submitOrder.trading_type;
-    let findOrder, findOrderScore;
-    let searchCount = 0;
+    let findOrder, findOrderScore, nextStockPrice, searchCount = 0;
     const orderToDelete = {
       sell: [],
       buy: [],
@@ -168,7 +167,7 @@ export class OrdersExecutionService {
           }
           await utils.orderCompleteUpdate(prisma, order);
           await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 1);
-          await utils.stockPriceUpdate(prisma, data, findOrder.price);
+          nextStockPrice = findOrder.price;
 
           await this.websocket.accountUpdate(submitOrder.account_id);
           await this.websocket.accountUpdate(findOrder.account_id);
@@ -238,7 +237,7 @@ export class OrdersExecutionService {
           await this.redis.zremrangebyscore(redisKey, score, score);
           await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
 
-          await utils.stockPriceUpdate(prisma, data, findOrder.price);
+          nextStockPrice = findOrder.price;
           await this.websocket.accountUpdate(submitOrder.account_id);
           await this.websocket.accountUpdate(findOrder.account_id);
 
@@ -298,7 +297,7 @@ export class OrdersExecutionService {
             findOrder,
           );
           await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 3);
-          await utils.stockPriceUpdate(prisma, data, findOrder.price);
+          nextStockPrice = findOrder.price;
 
           submitOrder.match_number =
             submitOrder.match_number +
@@ -363,6 +362,9 @@ export class OrdersExecutionService {
         break;
       }
     }
+
+    await utils.stockPriceUpdate(prisma, data, nextStockPrice);
+    await this.redis.set(`stockPrice:${data.stockId}`, nextStockPrice);
     
     return orderToDelete;
   }
