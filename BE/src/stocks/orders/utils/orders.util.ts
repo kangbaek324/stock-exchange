@@ -212,27 +212,21 @@ export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) 
     }
 }
 
-/**
- * 체결정보 DB 기록
- */
-export async function createOrderMatch(prisma, data, submitOrder, findOrder, numberOfCase) {
-    if (numberOfCase == 3) {
-        await prisma.order_match.create({
-            data: {
-                stock_id: data.stockId,
-                number: findOrder.number - findOrder.match_number,
-                initial_order_id: findOrder.id,
-                order_id: submitOrder.id
-            }
-        });
+export function createOrderMatch(data, submitOrder, findOrder, isFindOrderBigger?: boolean) {
+    // 3번째 경우의 수: 제출한 주문의 수가 더 클때, 찾은 주문의 수가 모두 체결된것이기에 찾은 주문을 기준으로 number를 맞춰야 함
+    if (isFindOrderBigger) {
+        return {
+            stock_id: data.stockId,
+            number: findOrder.number - findOrder.match_number,
+            initial_order_id: findOrder.id,
+            order_id: submitOrder.id
+        }
     } else {
-        await prisma.order_match.create({
-            data: {
-                stock_id: data.stockId,
-                number: submitOrder.number - submitOrder.match_number,
-                initial_order_id: findOrder.id,
-                order_id: submitOrder.id
-            }
-        });
+        return {
+            stock_id: data.stockId,
+            number: submitOrder.number - submitOrder.match_number,
+            initial_order_id: findOrder.id,
+            order_id: submitOrder.id
+        }
     }
 }

@@ -105,6 +105,7 @@ export class OrdersExecutionService {
       sell: [],
       buy: [],
     };
+    const createMatchList = []; 
 
     while (true) {
       const findOrderOrigin = await this.findOrder(prisma, data, tradingType, searchCount);
@@ -166,7 +167,7 @@ export class OrdersExecutionService {
             orderToDelete.sell.push(submitOrderScore);
           }
           await utils.orderCompleteUpdate(prisma, order);
-          await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 1);
+          createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder));
           nextStockPrice = findOrder.price;
 
           await this.websocket.accountUpdate(submitOrder.account_id);
@@ -230,7 +231,7 @@ export class OrdersExecutionService {
             findOrder,
             submitOrder,
           );
-          await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 2);
+          createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder));
           const score = findOrderScore[searchCount + 1];
           findOrder.match_number = findOrder.match_number + (submitOrder.number - submitOrder.match_number);
           
@@ -296,7 +297,7 @@ export class OrdersExecutionService {
             submitOrder,
             findOrder,
           );
-          await utils.createOrderMatch(prisma, data, submitOrder, findOrder, 3);
+          createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder, true));
           nextStockPrice = findOrder.price;
 
           submitOrder.match_number =
@@ -363,8 +364,12 @@ export class OrdersExecutionService {
       }
     }
 
+    // 주식 가격 업데이트
     await utils.stockPriceUpdate(prisma, data, nextStockPrice);
     await this.redis.set(`stockPrice:${data.stockId}`, nextStockPrice);
+
+    // 체결 로그 업데이트
+    await prisma.order_match.createMany({ data: createMatchList });
     
     return orderToDelete;
   }

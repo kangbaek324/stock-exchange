@@ -288,12 +288,11 @@ export class OrdersService {
 
   /**
    * @TODO
-   * Redis, DB중 하나라도 실패시 롤백 하는 로직 추가 필요
+   * Redis, DB중 하나라도 실패시 롤백 하는 로직 추가 필요,
+   * Score String화 필요
    */
   async edit(data: EditDto) {
-    let order, redisKey, 
-    beforeScore, newScore, 
-    beforeOrder, newOrder;
+    let order, redisKey, beforeScore, newScore, beforeOrder, newOrder;
 
     try {
       // 기존 주문 조회
@@ -345,6 +344,7 @@ export class OrdersService {
   /**
    * @TODO
    * Redis 롤백 구현 필요
+   * Score String화 필요
    */
   async cancel(data: CancelDto) {
     let order;
