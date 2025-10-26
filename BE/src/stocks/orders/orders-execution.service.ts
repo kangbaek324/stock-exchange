@@ -101,11 +101,16 @@ export class OrdersExecutionService {
   ): Promise<unknown> {
     const tradingType = submitOrder.trading_type;
     let findOrder, findOrderScore, nextStockPrice, searchCount = 0;
+
     const orderToDelete = {
       sell: [],
       buy: [],
     };
     const createMatchList = []; 
+    const accountUpdateList = [submitOrder.account_id];
+    const isInAccountUpdateList = new Map<number, boolean>;
+
+    isInAccountUpdateList[submitOrder.account_id] = true;
 
     while (true) {
       const findOrderOrigin = await this.findOrder(prisma, data, tradingType, searchCount);
@@ -170,8 +175,11 @@ export class OrdersExecutionService {
           createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder));
           nextStockPrice = findOrder.price;
 
-          await this.websocket.accountUpdate(submitOrder.account_id);
-          await this.websocket.accountUpdate(findOrder.account_id);
+          if (!isInAccountUpdateList[findOrder.account_id]) {
+            accountUpdateList.push(findOrder.account_id);
+
+            isInAccountUpdateList[findOrder.account_id] = true;
+          }
 
           break;
         } else if (submitOrderNumber < findOrderNumber) {
@@ -239,8 +247,12 @@ export class OrdersExecutionService {
           await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
 
           nextStockPrice = findOrder.price;
-          await this.websocket.accountUpdate(submitOrder.account_id);
-          await this.websocket.accountUpdate(findOrder.account_id);
+
+          if (!isInAccountUpdateList[findOrder.account_id]) {
+            accountUpdateList.push(findOrder.account_id);
+
+            isInAccountUpdateList[findOrder.account_id] = true;
+          }
 
           break;
         } else if (submitOrderNumber > findOrderNumber) {
@@ -297,8 +309,15 @@ export class OrdersExecutionService {
             submitOrder,
             findOrder,
           );
+
           createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder, true));
           nextStockPrice = findOrder.price;
+
+          if (!isInAccountUpdateList[findOrder.account_id]) {
+            accountUpdateList.push(findOrder.account_id);
+
+            isInAccountUpdateList[findOrder.account_id] = true;
+          }
 
           submitOrder.match_number =
             submitOrder.match_number +
@@ -364,12 +383,20 @@ export class OrdersExecutionService {
       }
     }
 
+    /**
+     * @TODO 함수 이름상 아래 로직을 밖으로 빼야됨
+     */
     // 주식 가격 업데이트
     await utils.stockPriceUpdate(prisma, data, nextStockPrice);
     await this.redis.set(`stockPrice:${data.stockId}`, nextStockPrice);
 
     // 체결 로그 업데이트
     await prisma.order_match.createMany({ data: createMatchList });
+
+    // 계좌 업데이트 사항 전송 (웹소켓)
+    for (const accountId of accountUpdateList) {
+      await this.websocket.accountUpdate(accountId);
+    }
     
     return orderToDelete;
   }
