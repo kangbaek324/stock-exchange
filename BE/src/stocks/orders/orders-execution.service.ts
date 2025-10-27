@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BuyDto } from './dtos/buy.dto';
 import { SellDto } from './dtos/sell.dto';
-import { PrismaClient, TradingType } from '@prisma/client';
+import { order, PrismaClient, TradingType, user_stocks } from '@prisma/client';
 import * as utils from './utils/orders.util';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { RedisService } from '@liaoliaots/nestjs-redis';
@@ -96,21 +96,33 @@ export class OrdersExecutionService {
   async order(
     prisma: PrismaClient,
     data: BuyDto | SellDto,
-    submitOrder,
+    submitOrder: order,
     submitOrderScore: number,
-  ): Promise<unknown> {
+  ): Promise<unknown> 
+  {
     const tradingType = submitOrder.trading_type;
-    let findOrder, findOrderScore, nextStockPrice, searchCount = 0;
-
-    const orderToDelete = {
-      sell: [],
-      buy: [],
-    };
+    let findOrder: order, findOrderScore, nextStockPrice, searchCount = 0;
+    const orderToDelete = { sell: [], buy: [] };
     const createMatchList = []; 
     const accountUpdateList = [submitOrder.account_id];
-    const isInAccountUpdateList = new Map<number, boolean>;
+    const isInAccountUpdateList = new Map<number, boolean>();
+    isInAccountUpdateList.set(submitOrder.account_id, true);
 
-    isInAccountUpdateList[submitOrder.account_id] = true;
+    let userStockList: { update: number[] } = { update: [] }; // accountId 저장
+    let userStocks = new Map<number, user_stocks>(); // accountId, user_stocks 객체, 이름 stocks로 바꿔야됨
+
+    if (!userStocks.get(submitOrder.account_id)) {
+      const userStockForSubmitOrder = await prisma.user_stocks.findUnique({
+        where: { 
+          account_id_stock_id: {
+            account_id: submitOrder.account_id,
+            stock_id: submitOrder.stock_id
+          }
+        }
+      });
+
+      userStocks.set(submitOrder.account_id, userStockForSubmitOrder);
+    }
 
     while (true) {
       const findOrderOrigin = await this.findOrder(prisma, data, tradingType, searchCount);
@@ -123,49 +135,63 @@ export class OrdersExecutionService {
         const submitOrderNumber = submitOrder.number - submitOrder.match_number;
         const findOrderNumber = findOrder.number - findOrder.match_number;
 
+        if (!userStocks.get(findOrder.account_id)) {
+          const userStockForFindOrder = await prisma.user_stocks.findUnique({
+            where: { 
+              account_id_stock_id: {
+                account_id: findOrder.account_id,
+                stock_id: findOrder.stock_id
+              }
+            }
+          });
+  
+          userStocks.set(findOrder.account_id, userStockForFindOrder);
+        }
+
         if (submitOrderNumber == findOrderNumber) {
           const order = [findOrder, submitOrder];
+          const increaseNumber = submitOrderNumber;
+          const decreaseNumber = findOrderNumber;
+
           // 잔고 수정
           if (tradingType == 'buy') {
-            await utils.accountUpdate(
-              prisma,
-              data.stockId,
-              submitOrder.account_id,
-              submitOrderNumber,
-              'increase',
-              false,
-              findOrder.price,
+            [userStockList, userStocks] = await utils.userStockIncrease(
+              prisma, 
+              submitOrder.stock_id, submitOrder.account_id,
+              increaseNumber,
+              userStockList,
+              userStocks,
+              findOrder.price
             );
 
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockDecrease(
               prisma,
-              data.stockId,
-              findOrder.account_id,
-              submitOrderNumber,
-              'decrease',
-              true,
+              findOrder.stock_id, findOrder.account_id,
+              decreaseNumber,
+              userStockList,
+              userStocks,
+              true
             );
 
             orderToDelete.buy.push(submitOrderScore);
             orderToDelete.sell.push(findOrderScore[searchCount + 1]);
           } else {
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockDecrease(
               prisma,
-              data.stockId,
-              submitOrder.account_id,
-              submitOrderNumber,
-              'decrease',
-              false,
+              submitOrder.stock_id, submitOrder.account_id,
+              decreaseNumber,
+              userStockList,
+              userStocks,
+              false
             );
 
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockIncrease(
               prisma,
-              data.stockId,
-              findOrder.account_id,
-              submitOrderNumber,
-              'increase',
-              false,
-              findOrder.price,
+              findOrder.stock_id, findOrder.account_id,
+              increaseNumber,
+              userStockList,
+              userStocks,
+              findOrder.price
             );
 
             orderToDelete.buy.push(findOrderScore[searchCount + 1]);
@@ -175,10 +201,10 @@ export class OrdersExecutionService {
           createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder));
           nextStockPrice = findOrder.price;
 
-          if (!isInAccountUpdateList[findOrder.account_id]) {
+          if (!isInAccountUpdateList.get(findOrder.account_id)) {
             accountUpdateList.push(findOrder.account_id);
 
-            isInAccountUpdateList[findOrder.account_id] = true;
+            isInAccountUpdateList.set(findOrder.account_id, true);
           }
 
           break;
@@ -186,48 +212,49 @@ export class OrdersExecutionService {
           const order = [submitOrder];
           let redisKey;
 
+          const increaseNumber = submitOrderNumber;
+          const decreaseNumber = submitOrderNumber;
+
           // 잔고 수정
           if (tradingType == 'buy') {
-            await utils.accountUpdate(
+            //
+            [userStockList, userStocks] = await utils.userStockIncrease(
               prisma,
-              data.stockId,
-              submitOrder.account_id,
-              submitOrderNumber,
-              'increase',
-              false,
-              findOrder.price,
+              submitOrder.stock_id, submitOrder.account_id,
+              increaseNumber,
+              userStockList,
+              userStocks,
+              findOrder.price
             );
 
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockDecrease(
               prisma,
-              data.stockId,
-              findOrder.account_id,
-              submitOrderNumber,
-              'decrease',
-              true,
+              findOrder.stock_id, findOrder.account_id,
+              decreaseNumber,
+              userStockList,
+              userStocks,
+              true
             );
-
             redisKey = `orderbook:${data.stockId}:sell`;
             orderToDelete.buy.push(submitOrderScore);
           } else {
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockDecrease(
               prisma,
-              data.stockId,
-              submitOrder.account_id,
-              submitOrderNumber,
-              'decrease',
-              false,
+              submitOrder.stock_id, submitOrder.account_id,
+              decreaseNumber,
+              userStockList,
+              userStocks,
+              false
             );
 
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockIncrease(
               prisma,
-              data.stockId,
-              findOrder.account_id,
-              submitOrderNumber,
-              'increase',
-              false,
-              findOrder.price,
-            );
+              findOrder.stock_id, findOrder.account_id,
+              increaseNumber,
+              userStockList,
+              userStocks,
+              findOrder.price
+            )
 
             redisKey = `orderbook:${data.stockId}:buy`;
             orderToDelete.sell.push(submitOrderScore);
@@ -248,56 +275,57 @@ export class OrdersExecutionService {
 
           nextStockPrice = findOrder.price;
 
-          if (!isInAccountUpdateList[findOrder.account_id]) {
+          if (!isInAccountUpdateList.get(findOrder.account_id)) {
             accountUpdateList.push(findOrder.account_id);
 
-            isInAccountUpdateList[findOrder.account_id] = true;
+            isInAccountUpdateList.set(findOrder.account_id, true);
           }
 
           break;
         } else if (submitOrderNumber > findOrderNumber) {
           const order = [findOrder];
 
+          const increaseNumber = findOrderNumber;
+          const decreaseNumber = findOrderNumber;
+
           // 잔고 수정
           if (tradingType == 'buy') {
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockIncrease(
               prisma,
-              data.stockId,
-              submitOrder.account_id,
-              findOrderNumber,
-              'increase',
-              false,
-              findOrder.price,
+              submitOrder.stock_id, submitOrder.account_id,
+              increaseNumber,
+              userStockList,
+              userStocks,
+              findOrder.price
             );
 
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockDecrease(
               prisma,
-              data.stockId,
-              findOrder.account_id,
-              findOrderNumber,
-              'decrease',
-              true,
+              findOrder.stock_id, findOrder.account_id,
+              decreaseNumber,
+              userStockList,
+              userStocks,
+              true
             );
 
             orderToDelete.sell.push(findOrderScore[searchCount + 1]);
           } else {
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockDecrease(
               prisma,
-              data.stockId,
-              submitOrder.account_id,
-              findOrderNumber,
-              'decrease',
-              false,
+              submitOrder.stock_id, submitOrder.account_id,
+              decreaseNumber,
+              userStockList,
+              userStocks,
+              false
             );
 
-            await utils.accountUpdate(
+            [userStockList, userStocks] = await utils.userStockIncrease(
               prisma,
-              data.stockId,
-              findOrder.account_id,
-              findOrderNumber,
-              'increase',
-              false,
-              findOrder.price,
+              findOrder.stock_id, findOrder.account_id,
+              increaseNumber,
+              userStockList,
+              userStocks,
+              findOrder.price
             );
 
             orderToDelete.buy.push(findOrderScore[searchCount + 1]);
@@ -313,10 +341,10 @@ export class OrdersExecutionService {
           createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder, true));
           nextStockPrice = findOrder.price;
 
-          if (!isInAccountUpdateList[findOrder.account_id]) {
+          if (!isInAccountUpdateList.get(findOrder.account_id)) {
             accountUpdateList.push(findOrder.account_id);
 
-            isInAccountUpdateList[findOrder.account_id] = true;
+            isInAccountUpdateList.set(findOrder.account_id, true);
           }
 
           submitOrder.match_number =
@@ -329,9 +357,17 @@ export class OrdersExecutionService {
         // 더이상 체결할 주문이 없거나 / 즉시 체결가능한 주문이 없는경우
 
         // 유저가 가진 주식 조회
-        const userStocks = await prisma.user_stocks.findFirst({
-          where: { account_id: submitOrder.account_id, stock_id: data.stockId },
-        });
+        let userStock = userStocks.get(submitOrder.account_id);
+        if (!userStock) {
+          userStock = await prisma.user_stocks.findUnique({
+            where: { 
+              account_id_stock_id: {
+                account_id: submitOrder.account_id,
+                stock_id: submitOrder.stock_id
+              }
+            }
+          });
+        }
 
         // 시장가 주문중 미체결이 있는 경우
         if (
@@ -359,14 +395,10 @@ export class OrdersExecutionService {
 
         // 매도 주문시 가능수량 업데이트
         if (tradingType == 'sell') {
-          await prisma.user_stocks.update({
-            where: { id: userStocks.id },
-            data: {
-              can_number:
-                userStocks.can_number -
-                BigInt(submitOrder.number - submitOrder.match_number),
-            },
-          });
+          userStock.can_number = userStock.can_number - (submitOrder.number - submitOrder.match_number);
+          userStocks.set(submitOrder.account_id, userStock);
+
+          userStockList.update.push(submitOrder.account_id);
         }
         
         // 지정가 매매에 대해서 남은 수량 Redis 업데이트
@@ -378,6 +410,15 @@ export class OrdersExecutionService {
         // Redis 남은 주문 업데이트
         await this.redis.zremrangebyscore(redisKey, submitOrderScore, submitOrderScore);
         await this.redis.zadd(redisKey, submitOrderScore, utils.orderToJson(submitOrder));
+
+        if (!nextStockPrice) {
+          // @TODO Redis 적용하기
+          const stock = await prisma.stocks.findUnique({
+            where: { id: data.stockId }
+          });
+
+          nextStockPrice = stock.price;
+        }
 
         break;
       }
@@ -392,6 +433,19 @@ export class OrdersExecutionService {
 
     // 체결 로그 업데이트
     await prisma.order_match.createMany({ data: createMatchList });
+
+    // 계좌 잔고 업데이트
+    for(const accountId of userStockList.update) {
+      await prisma.user_stocks.update({
+        where: { 
+          account_id_stock_id: {
+            account_id: accountId,
+            stock_id: data.stockId
+          }
+        },
+        data: userStocks.get(accountId)
+      });
+    }
 
     // 계좌 업데이트 사항 전송 (웹소켓)
     for (const accountId of accountUpdateList) {

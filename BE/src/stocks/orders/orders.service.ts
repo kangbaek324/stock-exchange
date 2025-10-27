@@ -8,7 +8,7 @@ import { OrdersExecutionService } from './orders-execution.service';
 import { GetOrderDto } from './dtos/get-order.dto';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { EditDto } from './dtos/edit.dto';
-import { PrismaClient } from '@prisma/client';
+import { order, PrismaClient } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { RedisService } from '@liaoliaots/nestjs-redis';
 import Redis from 'ioredis';
@@ -347,7 +347,7 @@ export class OrdersService {
    * Score String화 필요
    */
   async cancel(data: CancelDto) {
-    let order;
+    let order: order;
 
     // 취소 주문
     try {
@@ -387,7 +387,10 @@ export class OrdersService {
 
           await this.prisma.user_stocks.update({
             where: {
-              id: userStock.id,
+              account_id_stock_id: {
+                stock_id: order.stock_id,
+                account_id: order.account_id
+              }
             },
             data: {
               can_number:

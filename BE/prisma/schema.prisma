@@ -40,7 +40,7 @@ model accounts {
   money          BigInt
   created_at     DateTime  @default(now())
 
-  user_stocks user_stocks[]
+  user_stocks user_stocks[] @relation("UserStocksToAccounts")
   order order[]
   users users @relation(fields: [user_id], references: [id])
 }
@@ -48,11 +48,11 @@ model accounts {
 model stocks {
   id    Int      @id @default(autoincrement())
   name  String   @unique @db.VarChar(30)
-  price Int
+  price Int //@TODO bigint로 변경해야됨
   created_at  DateTime @default(now())
   broken_at   DateTime? 
 
-  user_stocks user_stocks[]
+  user_stocks user_stocks[] @relation("UserStocksToStocks")
   order order[]
   order_match order_match[]
   stockHistory stock_history[]
@@ -72,7 +72,6 @@ model stock_history {
 
 
 model user_stocks {
-  id         Int   @id @default(autoincrement())
   account_id Int
   stock_id   Int
   number     BigInt
@@ -80,8 +79,9 @@ model user_stocks {
   average    Int
   total_buy_amount BigInt @default(0)
 
-  accounts accounts @relation(fields: [account_id], references: [id])
-  stocks stocks @relation(fields: [stock_id], references: [id])
+  @@id([account_id, stock_id])
+  accounts accounts @relation("UserStocksToAccounts", fields: [account_id], references: [id])
+  stocks stocks @relation("UserStocksToStocks", fields: [stock_id], references: [id])
 }
 
 model order {

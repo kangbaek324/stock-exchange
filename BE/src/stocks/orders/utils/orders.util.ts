@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { order, PrismaClient, user_stocks } from "@prisma/client";
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 
@@ -16,82 +16,109 @@ export function orderToJson(order) {
 }
 
 /**
- * 계좌 업데이트
  * 
- * 보유 수량, 돈 
- * 
+ * @param prisma 
+ * @param stockId 
+ * @param accountId 
+ * @param increaseNumber 
+ * @param userStockList 
+ * @param userStocks 
+ * @param buyPrice 
+ * @returns userStockList, userStocks를 담은 배열로 반환
  */
-export async function accountUpdate(
+export async function userStockIncrease(
     prisma: PrismaClient,
-    stock_id: number,
-    account_id: number,
-    number: number,
-    type: "increase" | "decrease",
-    isFound: boolean,
-    buyPrice?: number,
-) {
-    const userStocks = await prisma.user_stocks.findFirst({
-        where : { account_id : account_id, stock_id : stock_id }
-    });
-    if (type == "increase") {
-        if (!userStocks) {
-            await prisma.user_stocks.create({
-                data : {
-                    account_id: account_id,
-                    stock_id: stock_id,
-                    number: BigInt(number),
-                    can_number: BigInt(number),
-                    average: buyPrice, 
-                    total_buy_amount: BigInt(buyPrice) * BigInt(number)
-                }
-            });
-        }
-        else {
-            await prisma.user_stocks.update({
-                where : { id : userStocks.id },
-                   data : {
-                    number : userStocks.number + BigInt(number),
-                    can_number : userStocks.can_number + BigInt(number),
-                    average: Number(
-                    ((BigInt(userStocks.average) * userStocks.number) +
-                    (BigInt(buyPrice) * BigInt(number)))
-                    / (userStocks.number + BigInt(number))
-                    ),
-                    total_buy_amount: userStocks.total_buy_amount + BigInt(buyPrice) * BigInt(number)
-                }
-            });
-        }
+    stockId: number,
+    accountId: number,
+    increaseNumber: bigint,
+    userStockList: { update: number[] }, // accountId 저장
+    userStocks: Map<number, user_stocks>, // accountId, user_stocks 객체
+    buyPrice: number
+): Promise<[{ update: number[] }, Map<number, user_stocks>]> {
+    const userStock = userStocks.get(accountId);
+
+    // 첫 매수
+    if (!userStock) {
+        userStocks.set(accountId, await prisma.user_stocks.create({
+            data : {
+                account_id: accountId,
+                stock_id: stockId,
+                number: increaseNumber,
+                can_number: increaseNumber,
+                average: buyPrice, 
+                total_buy_amount: BigInt(buyPrice) * increaseNumber
+            }
+        }));
     }
-    else if (type == "decrease") {
-        if (userStocks.number - BigInt(number) == BigInt(0)) {
-            await prisma.user_stocks.delete({
-                where : { id : userStocks.id }
-            });
-        }
-        else if (isFound) {
-            await prisma.user_stocks.update({
-                where : { id: userStocks.id },
-                data : {
-                    number : userStocks.number - BigInt(number),
-                    total_buy_amount: userStocks.total_buy_amount - BigInt(userStocks.average) * BigInt(number)
-                }
-            })
-        }
-        else {
-            await prisma.user_stocks.update({
-                where : { id : userStocks.id },
-                data : {
-                    number : userStocks.number - BigInt(number),
-                    can_number : userStocks.can_number - BigInt(number),
-                    total_buy_amount: userStocks.total_buy_amount - BigInt(userStocks.average) * BigInt(number)
-                }
-            });
-        }
+    else {
+        userStocks.set(accountId, {
+            ...userStock,
+            number: userStock.number + increaseNumber,
+            can_number: userStock.can_number + increaseNumber,
+            average: Number(((BigInt(userStock.average) * userStock.number) + (BigInt(buyPrice) * increaseNumber)) / (userStock.number + increaseNumber)),
+            total_buy_amount: userStock.total_buy_amount + BigInt(buyPrice) * increaseNumber
+        });
+
+        userStockList.update.push(accountId);
     }
+
+    return [userStockList, userStocks];
+}
+
+/**
+ * 
+ * @param prisma 
+ * @param stockId 
+ * @param accountId 
+ * @param decreaseNumber 
+ * @param userStockList 
+ * @param userStocks 
+ * @param isFindOrder 
+ * @returns userStockList, userStocks를 담은 배열로 반환
+ */
+export async function userStockDecrease(
+    prisma: PrismaClient,
+    stockId: number,
+    accountId: number,
+    decreaseNumber: bigint,
+    userStockList: { update: number[] }, // accountId 저장
+    userStocks: Map<number, user_stocks>, // accountId, user_stocks 객체
+    isFindOrder: boolean
+): Promise<[{ update: number[] }, Map<number, user_stocks>]> {
+    const userStock = userStocks.get(accountId);
+
+    // 더 이상 보유 수량이 없을때
+    if (userStock.number - decreaseNumber == 0n) {
+        await prisma.user_stocks.delete({
+            where : { 
+                account_id_stock_id: {
+                    account_id: accountId,
+                    stock_id: stockId
+                } 
+            }
+        });
+    }
+    else {
+        userStocks.set(accountId, {
+            ...userStock,
+            number: userStock.number - decreaseNumber,
+            can_number: isFindOrder 
+                ? userStock.can_number
+                : userStock.can_number - decreaseNumber,
+            total_buy_amount: userStock.total_buy_amount - (BigInt(userStock.average) * decreaseNumber)
+        });
+
+        userStockList.update.push(accountId);
+    }
+
+    return [userStockList, userStocks];
 }
 
 /**
  * 체결되고 난뒤 잔여 수량 업데이트
+ * @param prisma 
+ * @param remainderOrder 
+ * @param completeOrder 
  */
 export async function orderMatchAndRemainderUpdate(prisma, remainderOrder, completeOrder) {
     await prisma.order.update({
@@ -105,12 +132,16 @@ export async function orderMatchAndRemainderUpdate(prisma, remainderOrder, compl
 }
 
 /**
- * 주문 상태 업데이트
+ *  * 주문 상태 업데이트
  * 
  * 배열의 크기는 최소1개 최대 2개
  * 주문이 한가지일 경우에는 number에 업데이트될 수량을 매게변수로 받음
+ * 
+ * @param prisma 
+ * @param orders 
+ * @param number 
  */
-export async function orderCompleteUpdate(prisma, orders, number?: number) {
+export async function orderCompleteUpdate(prisma, orders, number?: bigint) {
     if (orders.length == 2) {
         for(let i = 0; i < orders.length; i++) {
             await prisma.order.update({
@@ -138,7 +169,11 @@ export async function orderCompleteUpdate(prisma, orders, number?: number) {
 }
 
 /**
+ * 
  * 체결된 가격으로 주식가격 업데이트
+ * @param prisma 
+ * @param data 
+ * @param updatePrice 
  */
 export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) {
     await prisma.stocks.update({
