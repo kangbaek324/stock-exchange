@@ -104,6 +104,7 @@ export class OrdersService {
   async buy(data: BuyDto, user) {
     let result;
     let jsonOrder;
+    let accountUpdateList;
 
     // 매수 주문
     try {
@@ -140,7 +141,7 @@ export class OrdersService {
         );
 
         // 체결 가능 주문 탐색
-        result = await this.ordersExecution.order(
+        [result, accountUpdateList] = await this.ordersExecution.processSubmitOrder(
           prisma,
           data,
           submitOrder,
@@ -175,8 +176,12 @@ export class OrdersService {
     try {
       // 주식 가격 전송
       await this.websocket.stockUpdate(data.stockId);
-
-      // 주문 현황 업데이트 (미구현)
+      
+      // 계좌, 주문 현황 업데이트 사항 전송 (웹소켓)
+      for (const accountId of accountUpdateList) {
+        await this.websocket.accountUpdate(accountId);
+        await this.websocket.orderStatus(accountId);
+      }
 
       // 주식을 보유한 사람들의 잔고 업데이트
       const userStocks = await this.prisma.user_stocks.findMany({
@@ -198,6 +203,7 @@ export class OrdersService {
   async sell(data: SellDto, user) {
     let result;
     let jsonOrder;
+    let accountUpdateList;
 
     // 매도 주문
     try {
@@ -234,7 +240,7 @@ export class OrdersService {
         );
 
         // 체결 가능 주문 탐색
-        result = await this.ordersExecution.order(
+        [result, accountUpdateList] = await this.ordersExecution.processSubmitOrder(
           prisma,
           data,
           submitOrder,
@@ -271,6 +277,11 @@ export class OrdersService {
       await this.websocket.stockUpdate(data.stockId);
 
       // 주문 현황 업데이트 (미구현)
+            // 계좌, 주문 현황 업데이트 사항 전송 (웹소켓)
+      for (const accountId of accountUpdateList) {
+        await this.websocket.accountUpdate(accountId);
+        await this.websocket.orderStatus(accountId);
+      }
 
       // 주식을 보유한 사람들의 잔고 업데이트
       const userStocks = await this.prisma.user_stocks.findMany({
