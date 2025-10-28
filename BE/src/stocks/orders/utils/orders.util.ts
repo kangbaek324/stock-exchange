@@ -1,133 +1,124 @@
-import { PrismaClient } from "@prisma/client";
+import { order, PrismaClient, user_stocks } from "@prisma/client";
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 
 dayjs.extend(utc);
 
 /**
- * 주문제출
+ * 
+ * @param order 
+ * @returns Json으로 변환된 order을 반환
  */
-export async function submitOrder(prisma, submitOrder) {
-    return prisma.order.findUnique({
-        where : { id: submitOrder.id },
-    });
+export function orderToJson(order) {
+     return JSON.stringify(order, (_, value) =>
+        typeof value === 'bigint' ? value.toString() : value,
+    );
 }
 
 /**
- * 체결할 주문 조회
+ * 
+ * @param prisma 
+ * @param stockId 
+ * @param accountId 
+ * @param increaseNumber 
+ * @param userStockList 
+ * @param userStocks 
+ * @param buyPrice 
+ * @returns userStockList, userStocks를 담은 배열로 반환
  */
-export async function findOrder(prisma, data, tradingType) {
-    const stockId = data.stockId;
-    const orderType = data.orderType;
-    const price = data.price;
+export async function userStockIncrease(
+    prisma: PrismaClient,
+    stockId: number,
+    accountId: number,
+    increaseNumber: bigint,
+    userStockList: { update: number[] }, // accountId 저장
+    userStocks: Map<number, user_stocks>, // accountId, user_stocks 객체
+    buyPrice: number
+): Promise<[{ update: number[] }, Map<number, user_stocks>]> {
+    const userStock = userStocks.get(accountId);
 
-    let sql = `
-        SELECT id, account_id, price, number, match_number
-        FROM \`order\`
-        WHERE stock_id = ? AND trading_type = ? AND status = 'n'
-    `;
+    // 첫 매수
+    if (!userStock) {
+        userStocks.set(accountId, await prisma.user_stocks.create({
+            data : {
+                account_id: accountId,
+                stock_id: stockId,
+                number: increaseNumber,
+                can_number: increaseNumber,
+                average: buyPrice, 
+                total_buy_amount: BigInt(buyPrice) * increaseNumber
+            }
+        }));
+    }
+    else {
+        userStocks.set(accountId, {
+            ...userStock,
+            number: userStock.number + increaseNumber,
+            can_number: userStock.can_number + increaseNumber,
+            average: Number(((BigInt(userStock.average) * userStock.number) + (BigInt(buyPrice) * increaseNumber)) / (userStock.number + increaseNumber)),
+            total_buy_amount: userStock.total_buy_amount + BigInt(buyPrice) * increaseNumber
+        });
 
-    const params = [stockId];
-
-    if (tradingType === "sell") {
-        params.push("buy");
-        if (orderType === "limit") {
-            sql += ` AND price >= ?`;
-            params.push(price);
-        }
-        sql += ` ORDER BY price DESC, created_at ASC LIMIT 1 FOR UPDATE`;
-    } 
-    else if (tradingType === "buy") {
-        params.push("sell");
-        if (orderType === "limit") {
-            sql += ` AND price <= ?`;
-            params.push(price);
-        }
-        sql += ` ORDER BY price ASC, created_at ASC LIMIT 1 FOR UPDATE`;
+        userStockList.update.push(accountId);
     }
 
-    const [order] = await prisma.$queryRawUnsafe(sql, ...params);
-    return order ?? null;
-}  
-
+    return [userStockList, userStocks];
+}
 
 /**
- * 계좌 업데이트
  * 
- * 보유 수량, 돈 
- * 
+ * @param prisma 
+ * @param stockId 
+ * @param accountId 
+ * @param decreaseNumber 
+ * @param userStockList 
+ * @param userStocks 
+ * @param isFindOrder 
+ * @returns userStockList, userStocks를 담은 배열로 반환
  */
-export async function accountUpdate(
+export async function userStockDecrease(
     prisma: PrismaClient,
-    stock_id: number,
-    account_id: number,
-    number: number,
-    type: "increase" | "decrease",
-    isFound: boolean,
-    buyPrice?: number,
-) {
-    const userStocks = await prisma.user_stocks.findFirst({
-        where : { account_id : account_id, stock_id : stock_id }
-    });
-    if (type == "increase") {
-        if (!userStocks) {
-            await prisma.user_stocks.create({
-                data : {
-                    account_id: account_id,
-                    stock_id: stock_id,
-                    number: BigInt(number),
-                    can_number: BigInt(number),
-                    average: buyPrice, 
-                    total_buy_amount: BigInt(buyPrice) * BigInt(number)
-                }
-            });
-        }
-        else {
-            await prisma.user_stocks.update({
-                where : { id : userStocks.id },
-                   data : {
-                    number : userStocks.number + BigInt(number),
-                    can_number : userStocks.can_number + BigInt(number),
-                    average: Number(
-                    ((BigInt(userStocks.average) * userStocks.number) +
-                    (BigInt(buyPrice) * BigInt(number)))
-                    / (userStocks.number + BigInt(number))
-                    ),
-                    total_buy_amount: userStocks.total_buy_amount + BigInt(buyPrice) * BigInt(number)
-                }
-            });
-        }
+    stockId: number,
+    accountId: number,
+    decreaseNumber: bigint,
+    userStockList: { update: number[] }, // accountId 저장
+    userStocks: Map<number, user_stocks>, // accountId, user_stocks 객체
+    isFindOrder: boolean
+): Promise<[{ update: number[] }, Map<number, user_stocks>]> {
+    const userStock = userStocks.get(accountId);
+
+    // 더 이상 보유 수량이 없을때
+    if (userStock.number - decreaseNumber == 0n) {
+        await prisma.user_stocks.delete({
+            where : { 
+                account_id_stock_id: {
+                    account_id: accountId,
+                    stock_id: stockId
+                } 
+            }
+        });
     }
-    else if (type == "decrease") {
-        if (userStocks.number - BigInt(number) == BigInt(0)) {
-            await prisma.user_stocks.delete({
-                where : { id : userStocks.id }
-            });
-        }
-        else if (isFound) {
-            await prisma.user_stocks.update({
-                where : { id: userStocks.id },
-                data : {
-                    number : userStocks.number - BigInt(number),
-                    total_buy_amount: userStocks.total_buy_amount - BigInt(userStocks.average) * BigInt(number)
-                }
-            })
-        }
-        else {
-            await prisma.user_stocks.update({
-                where : { id : userStocks.id },
-                data : {
-                    number : userStocks.number - BigInt(number),
-                    can_number : userStocks.can_number - BigInt(number),
-                    total_buy_amount: userStocks.total_buy_amount - BigInt(userStocks.average) * BigInt(number)
-                }
-            });
-        }
+    else {
+        userStocks.set(accountId, {
+            ...userStock,
+            number: userStock.number - decreaseNumber,
+            can_number: isFindOrder 
+                ? userStock.can_number
+                : userStock.can_number - decreaseNumber,
+            total_buy_amount: userStock.total_buy_amount - (BigInt(userStock.average) * decreaseNumber)
+        });
+
+        userStockList.update.push(accountId);
     }
+
+    return [userStockList, userStocks];
 }
 
 /**
  * 체결되고 난뒤 잔여 수량 업데이트
+ * @param prisma 
+ * @param remainderOrder 
+ * @param completeOrder 
  */
 export async function orderMatchAndRemainderUpdate(prisma, remainderOrder, completeOrder) {
     await prisma.order.update({
@@ -141,12 +132,16 @@ export async function orderMatchAndRemainderUpdate(prisma, remainderOrder, compl
 }
 
 /**
- * 주문 상태 업데이트
+ *  * 주문 상태 업데이트
  * 
  * 배열의 크기는 최소1개 최대 2개
  * 주문이 한가지일 경우에는 number에 업데이트될 수량을 매게변수로 받음
+ * 
+ * @param prisma 
+ * @param orders 
+ * @param number 
  */
-export async function orderCompleteUpdate(prisma, orders, number?: number) {
+export async function orderCompleteUpdate(prisma, orders, number?: bigint) {
     if (orders.length == 2) {
         for(let i = 0; i < orders.length; i++) {
             await prisma.order.update({
@@ -174,7 +169,11 @@ export async function orderCompleteUpdate(prisma, orders, number?: number) {
 }
 
 /**
+ * 
  * 체결된 가격으로 주식가격 업데이트
+ * @param prisma 
+ * @param data 
+ * @param updatePrice 
  */
 export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) {
     await prisma.stocks.update({
@@ -248,27 +247,21 @@ export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) 
     }
 }
 
-/**
- * 체결정보 DB 기록
- */
-export async function createOrderMatch(prisma, data, submitOrder, findOrder, numberOfCase) {
-    if (numberOfCase == 3) {
-        await prisma.order_match.create({
-            data: {
-                stock_id: data.stockId,
-                number: findOrder.number - findOrder.match_number,
-                initial_order_id: findOrder.id,
-                order_id: submitOrder.id
-            }
-        });
+export function createOrderMatch(data, submitOrder, findOrder, isFindOrderBigger?: boolean) {
+    // 3번째 경우의 수: 제출한 주문의 수가 더 클때, 찾은 주문의 수가 모두 체결된것이기에 찾은 주문을 기준으로 number를 맞춰야 함
+    if (isFindOrderBigger) {
+        return {
+            stock_id: data.stockId,
+            number: findOrder.number - findOrder.match_number,
+            initial_order_id: findOrder.id,
+            order_id: submitOrder.id
+        }
     } else {
-        await prisma.order_match.create({
-            data: {
-                stock_id: data.stockId,
-                number: submitOrder.number - submitOrder.match_number,
-                initial_order_id: findOrder.id,
-                order_id: submitOrder.id
-            }
-        });
+        return {
+            stock_id: data.stockId,
+            number: submitOrder.number - submitOrder.match_number,
+            initial_order_id: findOrder.id,
+            order_id: submitOrder.id
+        }
     }
 }

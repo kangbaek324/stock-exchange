@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@datastructures-js/priority-queue": "^6.3.3",
+    "@liaoliaots/nestjs-redis": "^10.0.0",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^10.0.0",
@@ -44,6 +45,7 @@
     "cookie-parser": "^1.4.7",
     "dayjs": "^1.11.13",
     "dotenv": "^16.4.7",
+    "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
     "nest-winston": "^1.10.2",
     "passport-jwt": "^4.0.1",

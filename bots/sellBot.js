@@ -5,7 +5,7 @@ class SellBot {
   constructor() {
     this.config = {
       accessToken:
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInVzZXJuYW1lIjoiYWRtaW4yIiwiaWF0IjoxNzUxMjAzODkzfQ.UkCGnB-TUW4oBCAzOSGsSpJnI-tMVZ85vGzudjkGNMI",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInVzZXJuYW1lIjoiYWRtaW4yIiwiaWF0IjoxNzYxMzI1ODA2fQ.UxnfM2lHyhHRdL4LYFHAa3nKo1p-AuRo_mhS-0ilkss",
       accountNumber: 1001,
       baseUrl: "http://localhost:3000",
       socketUrl: "http://localhost:3003/stock",

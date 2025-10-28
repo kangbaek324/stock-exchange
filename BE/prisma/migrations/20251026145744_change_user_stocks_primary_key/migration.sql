@@ -36,15 +36,27 @@ CREATE TABLE `stocks` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
+CREATE TABLE `stock_history` (
+    `stock_id` INTEGER NOT NULL,
+    `date` DATE NOT NULL,
+    `high` INTEGER NOT NULL,
+    `low` INTEGER NOT NULL,
+    `close` INTEGER NOT NULL,
+    `open` INTEGER NOT NULL,
+
+    PRIMARY KEY (`stock_id`, `date`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
 CREATE TABLE `user_stocks` (
-    `id` INTEGER NOT NULL AUTO_INCREMENT,
     `account_id` INTEGER NOT NULL,
     `stock_id` INTEGER NOT NULL,
-    `number` INTEGER NOT NULL,
-    `can_number` INTEGER NOT NULL,
-    `average` DOUBLE NOT NULL,
+    `number` BIGINT NOT NULL,
+    `can_number` BIGINT NOT NULL,
+    `average` INTEGER NOT NULL,
+    `total_buy_amount` BIGINT NOT NULL DEFAULT 0,
 
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`account_id`, `stock_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
@@ -53,8 +65,8 @@ CREATE TABLE `order` (
     `account_id` INTEGER NOT NULL,
     `stock_id` INTEGER NOT NULL,
     `price` INTEGER NOT NULL,
-    `number` INTEGER NOT NULL,
-    `match_number` INTEGER NULL DEFAULT 0,
+    `number` BIGINT NOT NULL,
+    `match_number` BIGINT NULL DEFAULT 0,
     `order_type` ENUM('limit', 'market') NOT NULL,
     `status` ENUM('y', 'n', 'c') NULL DEFAULT 'n',
     `trading_type` ENUM('buy', 'sell') NOT NULL,
@@ -67,7 +79,7 @@ CREATE TABLE `order` (
 CREATE TABLE `order_match` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `stock_id` INTEGER NOT NULL,
-    `number` INTEGER NOT NULL,
+    `number` BIGINT NOT NULL,
     `initial_order_id` INTEGER NOT NULL,
     `order_id` INTEGER NOT NULL,
     `matched_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -79,7 +91,10 @@ CREATE TABLE `order_match` (
 ALTER TABLE `accounts` ADD CONSTRAINT `accounts_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `user_stocks` ADD CONSTRAINT `user_stocks_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`account_number`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `stock_history` ADD CONSTRAINT `stock_history_stock_id_fkey` FOREIGN KEY (`stock_id`) REFERENCES `stocks`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `user_stocks` ADD CONSTRAINT `user_stocks_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `user_stocks` ADD CONSTRAINT `user_stocks_stock_id_fkey` FOREIGN KEY (`stock_id`) REFERENCES `stocks`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
