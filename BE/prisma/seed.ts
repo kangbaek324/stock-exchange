@@ -14,8 +14,8 @@ async function main() {
 
   await prisma.accounts.create({
     data : {
-        user_id : 1,
-        account_number : 1000,
+        userId : 1,
+        accountNumber : 1000,
         money : 100000000
     }
   });

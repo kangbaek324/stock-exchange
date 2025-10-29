@@ -46,9 +46,9 @@ export class OrdersService {
 
   async sendOrder(mqData) {
     if (mqData.type === 'buy') {
-      return await this.buy(mqData.data, mqData.user);
+      return await this.buy(mqData.data);
     } else if (mqData.type === 'sell') {
-      return await this.sell(mqData.data, mqData.user);
+      return await this.sell(mqData.data);
     } else if (mqData.type === 'cancel') {
       return await this.cancel(mqData.data);
     } else if (mqData.type === 'edit') {
@@ -67,7 +67,7 @@ export class OrdersService {
     try {
       const account = await this.prisma.accounts.findUnique({
         where: {
-          account_number: query.accountnumber,
+          accountNumber: query.accountnumber,
         },
         select: {
           id: true,
@@ -75,7 +75,7 @@ export class OrdersService {
       });
 
       const findConditions: any = {
-        account_id: account.id,
+        accountId: account.id,
       };
 
       if (query.status) {
@@ -101,7 +101,7 @@ export class OrdersService {
   /**
    * @TODO Redis 롤백 구현 필요
    */
-  async buy(data: BuyDto, user) {
+  async buy(data: BuyDto) {
     let result;
     let jsonOrder;
     let accountUpdateList;
@@ -109,8 +109,9 @@ export class OrdersService {
     // 매수 주문
     try {
       await this.prisma.$transaction(async (prisma: PrismaClient) => {
+        // 계좌 ID 조회
         const account = await prisma.accounts.findUnique({
-          where: { account_number: data.accountNumber },
+          where: { accountNumber: data.accountNumber },
           select: { id: true },
         });
 
@@ -119,12 +120,12 @@ export class OrdersService {
         // 주문 생성
         let submitOrder = await prisma.order.create({
           data: {
-            account_id: account.id,
-            stock_id: data.stockId,
+            accountId: account.id,
+            stockId: data.stockId,
             price: data.price,
             number: data.number,
-            order_type: data.orderType,
-            trading_type: 'buy',
+            orderType: data.orderType,
+            tradingType: 'buy',
           },
         });
 
@@ -184,13 +185,13 @@ export class OrdersService {
       }
 
       // 주식을 보유한 사람들의 잔고 업데이트
-      const userStocks = await this.prisma.user_stocks.findMany({
+      const userStocks = await this.prisma.userStocks.findMany({
         where: {
-          stock_id: data.stockId,
+          stockId: data.stockId,
         },
       });
       for (let i = 0; i < userStocks.length; i++) {
-        await this.websocket.accountUpdate(userStocks[i].account_id);
+        await this.websocket.accountUpdate(userStocks[i].accountId);
       }
     } catch (err) {
       console.error('웹소켓 전송오류' + err);
@@ -200,7 +201,7 @@ export class OrdersService {
   /**
    * @TODO Redis 롤백 구현 필요
    */
-  async sell(data: SellDto, user) {
+  async sell(data: SellDto) {
     let result;
     let jsonOrder;
     let accountUpdateList;
@@ -209,7 +210,7 @@ export class OrdersService {
     try {
       await this.prisma.$transaction(async (prisma: PrismaClient) => {
         const account = await prisma.accounts.findUnique({
-          where: { account_number: data.accountNumber },
+          where: { accountNumber: data.accountNumber },
           select: { id: true },
         });
 
@@ -218,12 +219,12 @@ export class OrdersService {
         // 주문 생성
         let submitOrder = await prisma.order.create({
           data: {
-            account_id: account.id,
-            stock_id: data.stockId,
+            accountId: account.id,
+            stockId: data.stockId,
             price: data.price,
             number: data.number,
-            order_type: data.orderType,
-            trading_type: 'sell',
+            orderType: data.orderType,
+            tradingType: 'sell',
           },
         });
 
@@ -277,20 +278,20 @@ export class OrdersService {
       await this.websocket.stockUpdate(data.stockId);
 
       // 주문 현황 업데이트 (미구현)
-            // 계좌, 주문 현황 업데이트 사항 전송 (웹소켓)
+      // 계좌, 주문 현황 업데이트 사항 전송 (웹소켓)
       for (const accountId of accountUpdateList) {
         await this.websocket.accountUpdate(accountId);
         await this.websocket.orderStatus(accountId);
       }
 
       // 주식을 보유한 사람들의 잔고 업데이트
-      const userStocks = await this.prisma.user_stocks.findMany({
+      const userStocks = await this.prisma.userStocks.findMany({
         where: {
-          stock_id: data.stockId,
+          stockId: data.stockId,
         },
       });
       for (let i = 0; i < userStocks.length; i++) {
-        await this.websocket.accountUpdate(userStocks[i].account_id);
+        await this.websocket.accountUpdate(userStocks[i].accountId);
       }
     } catch (err) {
       console.error('웹소켓 전송오류' + err);
@@ -300,10 +301,11 @@ export class OrdersService {
   /**
    * @TODO
    * Redis, DB중 하나라도 실패시 롤백 하는 로직 추가 필요,
+   * 정정시 주문시 체결가능한 주식 참색 로직 필요
    * Score String화 필요
    */
   async edit(data: EditDto) {
-    let order, redisKey, beforeScore, newScore, beforeOrder, newOrder;
+    let order: order, redisKey, beforeScore, newScore, beforeOrder, newOrder;
 
     try {
       // 기존 주문 조회
@@ -312,9 +314,9 @@ export class OrdersService {
       });
 
       redisKey =
-        order.trading_type == 'buy'
-          ? `orderbook:${order.stock_id}:buy`
-          : `orderbook:${order.stock_id}:sell`;
+        order.tradingType == 'buy'
+          ? `orderbook:${order.stockId}:buy`
+          : `orderbook:${order.stockId}:sell`;
 
       beforeOrder = orderToJson(order);
 
@@ -344,9 +346,9 @@ export class OrdersService {
 
     // 웹소켓 전송
     try {
-      await this.websocket.stockUpdate(order.stock_id);
-      await this.websocket.accountUpdate(order.account_id);
-      await this.websocket.orderStatus(order.account_id);
+      await this.websocket.stockUpdate(order.stockId);
+      await this.websocket.accountUpdate(order.accountId);
+      await this.websocket.orderStatus(order.accountId);
     } catch (err) {
       console.error('웹소켓 전송오류' + err);
     }
@@ -370,9 +372,9 @@ export class OrdersService {
 
         // 주문 취소 (Redis)
         const redisKey =
-          order.trading_type == 'buy'
-            ? `orderbook:${order.stock_id}:buy`
-            : `orderbook:${order.stock_id}:sell`;
+          order.tradingType == 'buy'
+            ? `orderbook:${order.stockId}:buy`
+            : `orderbook:${order.stockId}:sell`;
 
         const jsonOrder = orderToJson(order);
         await this.redis.zrem(redisKey, jsonOrder);
@@ -388,24 +390,24 @@ export class OrdersService {
         });
 
         // 매도 주문일 경우 가능수량 수정
-        if (order.trading_type == 'sell') {
-          const userStock = await this.prisma.user_stocks.findFirst({
+        if (order.tradingType == 'sell') {
+          const userStock = await this.prisma.userStocks.findFirst({
             where: {
-              stock_id: order.stock_id,
-              account_id: order.account_id,
+              stockId: order.stockId,
+              accountId: order.accountId,
             },
           });
 
-          await this.prisma.user_stocks.update({
+          await this.prisma.userStocks.update({
             where: {
-              account_id_stock_id: {
-                stock_id: order.stock_id,
-                account_id: order.account_id
+              accountId_stockId: {
+                stockId: order.stockId,
+                accountId: order.accountId
               }
             },
             data: {
-              can_number:
-                userStock.can_number + order.number - order.match_number,
+              canNumber:
+                userStock.canNumber + order.number - order.matchNumber,
             },
           });
         }
@@ -417,9 +419,9 @@ export class OrdersService {
 
     // 웹소켓 전송
     try {
-      await this.websocket.stockUpdate(order.stock_id);
-      await this.websocket.accountUpdate(order.account_id);
-      await this.websocket.orderStatus(order.account_id);
+      await this.websocket.stockUpdate(order.accountId);
+      await this.websocket.accountUpdate(order.accountId);
+      await this.websocket.orderStatus(order.accountId);
     } catch (err) {
       console.error('웹소켓 전송오류' + err);
     }

@@ -1,9 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { BuyDto } from './dtos/buy.dto';
 import { SellDto } from './dtos/sell.dto';
-import { order, PrismaClient, TradingType, user_stocks } from '@prisma/client';
+import { order, PrismaClient, TradingType, userStocks } from '@prisma/client';
 import * as utils from './utils/orders.util';
-import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { RedisService } from '@liaoliaots/nestjs-redis';
 import Redis from 'ioredis';
 import { handleEqualMatch, handlePartialMatch } from './utils/handleMatch';
@@ -13,14 +12,18 @@ import { handleRemainingMatch } from './utils/handleMatch';
 export class OrdersExecutionService {
   private readonly redis: Redis | null;
   constructor(
-    private readonly websocket: WebsocketGateway,
     private readonly redisService: RedisService,
   ) {
     this.redis = this.redisService.getOrThrow();
   }
 
   // 체결할 주문 검색
-  async findOrder(prisma: PrismaClient, data: BuyDto, tradingType: TradingType, searchCount: number) {
+  async findOrder(
+    prisma: PrismaClient, 
+    data: BuyDto | SellDto, 
+    tradingType: TradingType, 
+    searchCount: number
+  ) {
     const stockId = data.stockId;
     const orderType = data.orderType;
     const price = data.price;
@@ -34,8 +37,9 @@ export class OrdersExecutionService {
         if (!redisOrder[searchCount]) break;
 
         const rs = JSON.parse(redisOrder[searchCount]);
-        rs.match_number = BigInt(rs.match_number);
+        rs.matchNumber = BigInt(rs.matchNumber);
         rs.number = BigInt(rs.number);
+        rs.price = BigInt(rs.price);
 
         if (rs.price > price && orderType == "limit") return null;
 
@@ -45,10 +49,12 @@ export class OrdersExecutionService {
       case 'sell': {
         redisOrder = await this.redis.zrevrange('orderbook:1:buy', 0, -1, 'WITHSCORES'); // 높은 가격 먼저
         if (!redisOrder[searchCount]) break;
+
         
         const rs = JSON.parse(redisOrder[searchCount]);
-        rs.match_number = BigInt(rs.match_number);
+        rs.matchNumber = BigInt(rs.matchNumber);
         rs.number = BigInt(rs.number);
+        rs.price = BigInt(rs.price);
 
         if (rs.price < price && orderType == "limit") return null;
 
@@ -97,28 +103,27 @@ export class OrdersExecutionService {
 
   // 체결이 끝난후 후 처리
   async finalizeTradeResult(
-    prisma,
-    data, 
-    userStockList, 
-    userStocks, 
+    prisma: PrismaClient,
+    data: BuyDto | SellDto, 
+    userStockList: { update: number[] }, 
+    userStocks: Map<number, userStocks>, 
     createMatchList, 
-    accountUpdateList, 
-    nextStockPrice
+    nextStockPrice: number
   ) {
     // 주식 가격 업데이트
     await utils.stockPriceUpdate(prisma, data, nextStockPrice);
     await this.redis.set(`stockPrice:${data.stockId}`, nextStockPrice);
 
     // 체결 로그 업데이트
-    await prisma.order_match.createMany({ data: createMatchList });
+    await prisma.orderMatch.createMany({ data: createMatchList });
 
     // 계좌 잔고 업데이트
     for(const accountId of userStockList.update) {
-      await prisma.user_stocks.update({
+      await prisma.userStocks.update({
         where: { 
-          account_id_stock_id: {
-            account_id: accountId,
-            stock_id: data.stockId
+          accountId_stockId: {
+            accountId: accountId,
+            stockId: data.stockId
           }
         },
         data: userStocks.get(accountId)
@@ -131,31 +136,30 @@ export class OrdersExecutionService {
     data: BuyDto | SellDto,
     submitOrder: order,
     submitOrderScore: number,
-  ) 
-  {
-    const tradingType = submitOrder.trading_type;
+  ) {
+    const tradingType = submitOrder.tradingType;
     let findOrder: order, findOrderScore, nextStockPrice, searchCount = 0;
     let orderToDelete = { sell: [], buy: [] };
     let createMatchList = []; 
-    const accountUpdateList = [submitOrder.account_id];
+    const accountUpdateList = [submitOrder.accountId];
     const isInAccountUpdateList = new Map<number, boolean>();
-    isInAccountUpdateList.set(submitOrder.account_id, true);
+    isInAccountUpdateList.set(submitOrder.accountId, true);
 
     let userStockList: { update: number[] } = { update: [] }; // accountId 저장
-    let userStocks = new Map<number, user_stocks>(); // accountId, user_stocks 객체, 이름 stocks로 바꿔야됨
+    let userStocks = new Map<number, userStocks>(); // accountId, user_stocks 객체, 이름 stocks로 바꿔야됨
 
     // 메모리에 제출한 주문 등록
-    if (!userStocks.get(submitOrder.account_id)) {
-      const userStockForSubmitOrder = await prisma.user_stocks.findUnique({
+    if (!userStocks.get(submitOrder.accountId)) {
+      const userStockForSubmitOrder = await prisma.userStocks.findUnique({
         where: { 
-          account_id_stock_id: {
-            account_id: submitOrder.account_id,
-            stock_id: submitOrder.stock_id
+          accountId_stockId: {
+            accountId: submitOrder.accountId,
+            stockId: submitOrder.stockId
           }
         }
       });
 
-      userStocks.set(submitOrder.account_id, userStockForSubmitOrder);
+      userStocks.set(submitOrder.accountId, userStockForSubmitOrder);
     }
 
     while (true) {
@@ -169,22 +173,22 @@ export class OrdersExecutionService {
         findOrderScore = findOrderOrigin[1]; // score 조회방법: searchCount + 1
 
         // 찾은 주문 메모리에 저장
-        if (!userStocks.get(findOrder.account_id)) {
-          const userStockForFindOrder = await prisma.user_stocks.findUnique({
+        if (!userStocks.get(findOrder.accountId)) {
+          const userStockForFindOrder = await prisma.userStocks.findUnique({
             where: { 
-              account_id_stock_id: {
-                account_id: findOrder.account_id,
-                stock_id: findOrder.stock_id
+              accountId_stockId: {
+                accountId: findOrder.accountId,
+                stockId: findOrder.stockId
               }
             }
           });
   
-          userStocks.set(findOrder.account_id, userStockForFindOrder);
+          userStocks.set(findOrder.accountId, userStockForFindOrder);
         }
 
         // 체결 가능한 수량
-        const submitOrderNumber = submitOrder.number - submitOrder.match_number;
-        const findOrderNumber = findOrder.number - findOrder.match_number;
+        const submitOrderNumber = submitOrder.number - submitOrder.matchNumber;
+        const findOrderNumber = findOrder.number - findOrder.matchNumber;
 
         // 체결
         if (submitOrderNumber == findOrderNumber) {
@@ -208,10 +212,10 @@ export class OrdersExecutionService {
           createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder));
           nextStockPrice = findOrder.price;
 
-          if (!isInAccountUpdateList.get(findOrder.account_id)) {
-            accountUpdateList.push(findOrder.account_id);
+          if (!isInAccountUpdateList.get(findOrder.accountId)) {
+            accountUpdateList.push(findOrder.accountId);
 
-            isInAccountUpdateList.set(findOrder.account_id, true);
+            isInAccountUpdateList.set(findOrder.accountId, true);
           }
 
           break;
@@ -241,17 +245,16 @@ export class OrdersExecutionService {
           );
           createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder));
           const score = findOrderScore[searchCount + 1];
-          findOrder.match_number = findOrder.match_number + (submitOrder.number - submitOrder.match_number);
-          
+          findOrder.matchNumber = findOrder.matchNumber + (submitOrder.number - submitOrder.matchNumber)
           await this.redis.zremrangebyscore(redisKey, score, score);
           await this.redis.zadd(redisKey, score, utils.orderToJson(findOrder));
 
           nextStockPrice = findOrder.price;
 
-          if (!isInAccountUpdateList.get(findOrder.account_id)) {
-            accountUpdateList.push(findOrder.account_id);
+          if (!isInAccountUpdateList.get(findOrder.accountId)) {
+            accountUpdateList.push(findOrder.accountId);
 
-            isInAccountUpdateList.set(findOrder.account_id, true);
+            isInAccountUpdateList.set(findOrder.accountId, true);
           }
 
           break;
@@ -272,15 +275,15 @@ export class OrdersExecutionService {
           createMatchList.push(utils.createOrderMatch(data, submitOrder, findOrder, true));
           nextStockPrice = findOrder.price;
 
-          if (!isInAccountUpdateList.get(findOrder.account_id)) {
-            accountUpdateList.push(findOrder.account_id);
+          if (!isInAccountUpdateList.get(findOrder.accountId)) {
+            accountUpdateList.push(findOrder.accountId);
 
-            isInAccountUpdateList.set(findOrder.account_id, true);
+            isInAccountUpdateList.set(findOrder.accountId, true);
           }
 
-          submitOrder.match_number =
-            submitOrder.match_number +
-            (findOrder.number - findOrder.match_number);
+          submitOrder.matchNumber =
+            submitOrder.matchNumber +
+            (findOrder.number - findOrder.matchNumber);
 
           searchCount = searchCount + 2;
         }
@@ -288,13 +291,13 @@ export class OrdersExecutionService {
       else { // 체결할 주문이 없다면
         // 더이상 체결할 주문이 없거나 / 즉시 체결가능한 주문이 없는경우
         // 유저가 가진 주식 조회
-        let userStock = userStocks.get(submitOrder.account_id);
+        let userStock = userStocks.get(submitOrder.accountId);
         if (!userStock) {
-          userStock = await prisma.user_stocks.findUnique({
+          userStock = await prisma.userStocks.findUnique({
             where: { 
-              account_id_stock_id: {
-                account_id: submitOrder.account_id,
-                stock_id: submitOrder.stock_id
+              accountId_stockId: {
+                accountId: submitOrder.accountId,
+                stockId: submitOrder.stockId
               }
             }
           });
@@ -302,8 +305,8 @@ export class OrdersExecutionService {
 
         // 시장가 주문중 미체결이 있는 경우
         if (
-          submitOrder.number != submitOrder.match_number &&
-          submitOrder.order_type == 'market'
+          submitOrder.number != submitOrder.matchNumber &&
+          submitOrder.orderType == 'market'
         ) {
           // DB 취소
           await prisma.order.update({
@@ -326,10 +329,10 @@ export class OrdersExecutionService {
 
         // 매도 주문시 가능수량 업데이트
         if (tradingType == 'sell') {
-          userStock.can_number = userStock.can_number - (submitOrder.number - submitOrder.match_number);
-          userStocks.set(submitOrder.account_id, userStock);
+          userStock.canNumber = userStock.canNumber - (submitOrder.number - submitOrder.matchNumber);
+          userStocks.set(submitOrder.accountId, userStock);
 
-          userStockList.update.push(submitOrder.account_id);
+          userStockList.update.push(submitOrder.accountId);
         }
         
         // 지정가 매매에 대해서 남은 수량 Redis 업데이트
@@ -362,7 +365,6 @@ export class OrdersExecutionService {
       userStockList,
       userStocks,
       createMatchList,
-      accountUpdateList,
       nextStockPrice
     );
 

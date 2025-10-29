@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, UseGuards, Put, Query, Body, InternalServerErrorException, BadRequestException, HttpException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, UseGuards, Put, Query, Body, InternalServerErrorException, BadRequestException, HttpException, NotFoundException } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { AuthGuard } from '@nestjs/passport';
 import { BuyDto } from './dtos/buy.dto';
@@ -66,11 +66,13 @@ export class OrdersController {
   @Put("/")
   @UseGuards(AuthGuard("jwt"))
   async edit(@Body() data: EditDto, @GetUser() user): Promise<unknown> {
-    const resultMessage = await this.ordersValidationService.editValidate(data, user);
-    if (resultMessage) {
-      throw new BadRequestException(resultMessage);
-    }
-    return this.ordersService.sendMQ(data, user, "edit");
+    // const resultMessage = await this.ordersValidationService.editValidate(data, user);
+    // if (resultMessage) {
+    //   throw new BadRequestException(resultMessage);
+    // }
+    // return this.ordersService.sendMQ(data, user, "edit");
+
+    throw new NotFoundException(); // @TODO EDIT 완성시 주석 해지 해야함
   } 
 
   @Delete("/")

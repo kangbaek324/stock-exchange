@@ -85,7 +85,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       }
       else {
         const account = await this.prisma.accounts.findUnique({
-          where : { account_number: accountNumber }
+          where : { accountNumber: accountNumber }
         });
     
         if (!account) {
@@ -94,7 +94,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
           return false;
         }
   
-        if (account.user_id == userId) {
+        if (account.userId == userId) {
           client.leave("accountId_" + clientInfo.get(client.id).accountId);
           client.join("accountId_" + account.id);
           clientInfo.set(client.id, { userId: userId, accountId: account.id });
@@ -111,8 +111,8 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     else {
       // 최초 연결시 가장 처음 생성한 계좌를 기본계좌로 세팅
       const basicAccount = await this.prisma.accounts.findFirst({
-        where: { user_id: userId },
-        orderBy: { created_at: "asc" }
+        where: { userId: userId },
+        orderBy: { createdAt: "asc" }
       });
 
       if (!basicAccount) {
@@ -127,13 +127,15 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
   }
 
+  // 주식 가격 업데이트 내역 전송
+  // @TODO 호가창 전송하는 부분 Redis 적용하기
   public async stockUpdate(stockId: number) {
     const stockIdToString = stockId.toString();
     const today = dayjs().utc().format("YYYY-MM-DD");
     const yesterday = dayjs().utc().subtract(1, "day").format("YYYY-MM-DD");
     let data = {};
 
-    const stockInfo = await this.prisma.stocks.findUnique({
+    const stockInfoDB = await this.prisma.stocks.findUnique({
       where : {
         id : stockId
       },
@@ -143,28 +145,39 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       }
     });
 
-    const stockHistory = await this.prisma.stock_history.findUnique({
-      where: {
-        stock_id_date: {
-          stock_id: stockId,
-          date: new Date(today)
-        }
-      }
+    const stockInfo = {
+      name: stockInfoDB.name,
+      price: stockInfoDB.price.toString()
+    }
+
+    const stockHistoryDB = await this.prisma.stockHistory.findUnique({
+      where: { stockId_date: { stockId, date: new Date(today) } },
     });
 
-    const previousClose = await this.prisma.stock_history.findUnique({
+    const { high, low, close, open, ...rest } = stockHistoryDB;
+    const stockHistory = {
+      ...rest,
+      high: high.toString(),
+      low: low.toString(),
+      close: close.toString(),
+      open: open.toString(),
+    };
+
+    let previousClose;
+    const previousCloseDB = await this.prisma.stockHistory.findUnique({
       where: {
-        stock_id_date: {
-          stock_id: stockId,
+        stockId_date: {
+          stockId: stockId,
           date: new Date(yesterday)
         }
       },
       select: {
         close: true
       }
-    })
+    });
+    if (previousCloseDB) previousClose = previousCloseDB.close.toString();
 
-    let buyOrderbookData = await this.prisma.$queryRaw
+    let buyOrderbookData: any[] = await this.prisma.$queryRaw
     `
       SELECT trading_type, price, SUM(number - match_number) AS number
       FROM \`order\` o
@@ -173,7 +186,10 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       ORDER BY price DESC
       LIMIT 10
     `
-    let sellOrderbookData = await this.prisma.$queryRaw
+
+    console.log(buyOrderbookData);
+
+    let sellOrderbookData: any[] = await this.prisma.$queryRaw
     `
       SELECT trading_type, price, SUM(number - match_number) AS number
       FROM \`order\` o
@@ -182,20 +198,31 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       ORDER BY price ASC
       LIMIT 10
     `
-    let matchData: any = await this.prisma.$queryRaw
+
+    let matchData: any[] = await this.prisma.$queryRaw
     `
       select (select price from \`order\` o where o.id = om.initial_order_id) as price, number, (select trading_type from \`order\` o where o.id = om.order_id) as type
       from order_match om where stock_id = ${stockId}
       order by matched_at desc limit 20;
     `
 
+    for (let i = 0; i < buyOrderbookData.length; i++) {
+      buyOrderbookData[i].price = buyOrderbookData[i].price.toString(); 
+    }
+    
+    for (let i = 0; i < sellOrderbookData.length; i++) {
+      sellOrderbookData[i].price = sellOrderbookData[i].price.toString(); 
+    }
+
+
     for(let i = 0; i < matchData.length; i++) {
+        matchData[i].price = matchData[i].price.toString();
         matchData[i].number = matchData[i].number.toString();
     }
 
     data = {
       stockInfo: stockInfo,
-      stockHistory: stockHistory, 
+      stockHistory: stockHistory,
       previousClose: previousClose,
       buyOrderbookData: buyOrderbookData,
       sellOrderbookData: sellOrderbookData,
@@ -205,15 +232,16 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     this.server.to("stockId_" + stockIdToString).emit("stockUpdated", data);
   }
 
+  // 내 계좌 업데이트 내역 전송
   public async accountUpdate(accountId: number) {
-    const userStock = await this.prisma.user_stocks.findMany({
-      where: { account_id: accountId },
+    const userStock = await this.prisma.userStocks.findMany({
+      where: { accountId: accountId },
       select: {
-        stock_id: true,
+        stockId: true,
         number: true,
-        can_number: true,
+        canNumber: true,
         average: true,
-        total_buy_amount: true,
+        totalBuyAmount: true,
         stocks: {
           select: {
             name: true,
@@ -233,16 +261,16 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     
     for(let i = 0; i < userStock.length; i++) {
       const price = await this.prisma.stocks.findUnique({
-        where: { id: userStock[i].stock_id },
+        where: { id: userStock[i].stockId },
         select: { price: true }
       });
       data = {
         name: userStock[i].stocks.name,
-        nowPrice: price.price,
+        nowPrice: price.price.toString(),
         amount: userStock[i].number.toString(),
-        canAmount: userStock[i].can_number.toString(),
-        average: userStock[i].average,
-        totalBuyAmount: userStock[i].total_buy_amount.toString(),
+        canAmount: userStock[i].canNumber.toString(),
+        average: userStock[i].average.toString(),
+        totalBuyAmount: userStock[i].totalBuyAmount.toString(),
       }
       dataArray.push(data);
     } 
@@ -252,6 +280,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     this.server.to("accountId_" + accountId).emit("accountUpdated", dataArray)
   }
 
+  // 내 주문 업데이트 내역 전송
   public async orderStatus(accountId: number) {
     let returnData = {
       executionOrder: [],
@@ -259,8 +288,8 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     };
 
     let executionOrder = await this.prisma.order.findMany({
-      where: { account_id: accountId, status: "y" },
-      orderBy: { created_at: "desc" },
+      where: { accountId: accountId, status: "y" },
+      orderBy: { createdAt: "desc" },
       include: {
         stocks: { 
           select: {
@@ -272,8 +301,8 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     });
     
     let noExecutionOrder = await this.prisma.order.findMany({
-      where: { account_id: accountId, status: "n" },
-      orderBy: { created_at: "desc" },
+      where: { accountId: accountId, status: "n" },
+      orderBy: { createdAt: "desc" },
       include: {
         stocks: { 
           select: {
@@ -287,12 +316,12 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       let data = {
         id: executionOrder[i].id,
         stockName: executionOrder[i].stocks.name,
-        stockId: executionOrder[i].stock_id,
-        price: executionOrder[i].price,
+        stockId: executionOrder[i].stockId,
+        price: executionOrder[i].price.toString(),
         number: executionOrder[i].number.toString(),
-        matchNumber: executionOrder[i].match_number.toString(),
+        matchNumber: executionOrder[i].matchNumber.toString(),
         status: executionOrder[i].status,
-        tradingType: executionOrder[i].trading_type
+        tradingType: executionOrder[i].tradingType
       };
 
       returnData.executionOrder.push(data);
@@ -302,12 +331,12 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       let data = {
         id: noExecutionOrder[i].id,
         stockName: noExecutionOrder[i].stocks.name,
-        stockId: noExecutionOrder[i].stock_id,
-        price: noExecutionOrder[i].price,
+        stockId: noExecutionOrder[i].stockId,
+        price: noExecutionOrder[i].price.toString(),
         number: noExecutionOrder[i].number.toString(),
-        matchNumber: noExecutionOrder[i].match_number.toString(),
+        matchNumber: noExecutionOrder[i].matchNumber.toString(),
         status: noExecutionOrder[i].status,
-        tradingType: noExecutionOrder[i].trading_type
+        tradingType: noExecutionOrder[i].tradingType
       };
 
       returnData.noExecutionOrder.push(data);

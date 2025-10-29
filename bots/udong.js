@@ -29,7 +29,6 @@ class SellBot {
       { name: "패닉매도", weight: 3, speed: "매우빠름" },
       { name: "안정매도", weight: 10, speed: "보통" },
       { name: "대량매도", weight: 4, speed: "보통" },
-      { name: "갭메우기매도", weight: 12, speed: "빠름" },
     ];
 
     this.orderCount = 0;
@@ -100,7 +99,7 @@ class SellBot {
     setInterval(() => {
       if (Date.now() - this.patternStartTime > this.patternDuration)
         this.selectNewPattern();
-    }, 2000);
+    }, 500);
     this.scheduleNextTrade();
   }
 
@@ -159,19 +158,14 @@ class SellBot {
     if (!this.currentData) return;
 
     const price = this.currentData.stockInfo?.price || 9500;
-    let orderPrice, orderQuantity, orderType;
-
-    if (this.currentPattern.name === "갭메우기매도") {
-      const gap = this.findPriceGap();
-      if (!gap) return;
-      orderPrice = gap;
-      orderQuantity = Math.floor((Math.floor(Math.random() * 300) + 100) / 2);
-      orderType = "limit";
-    } else {
-      orderPrice = this.adjustPriceByTick(price);
-      orderQuantity = Math.floor((Math.floor(Math.random() * 200) + 50) / 2);
-      orderType = "market";
-    }
+    const randomTicks = Math.floor(Math.random() * 5) + 1;
+    const orderPrice = this.adjustPriceByTick(
+      price + randomTicks * this.getTickSize(price)
+    );
+    const orderQuantity = Math.floor(
+      (Math.floor(Math.random() * 200) + 50) / 2
+    );
+    const orderType = "market";
 
     await this.placeOrder(orderPrice, orderQuantity, orderType, false);
   }
@@ -227,21 +221,8 @@ class SellBot {
   }
 
   adjustPriceByTick(price) {
-    return (
-      Math.round(price / this.getTickSize(price)) * this.getTickSize(price)
-    );
-  }
-
-  findPriceGap() {
-    if (!this.currentData || !this.currentData.sellOrderbookData) return null;
-    const price = this.currentData.stockInfo?.price || 9500;
     const tick = this.getTickSize(price);
-    for (let i = 1; i <= 3; i++) {
-      const target = this.adjustPriceByTick(price + i * tick);
-      if (!this.currentData.sellOrderbookData.find((o) => o.price === target))
-        return target;
-    }
-    return null;
+    return Math.round(price / tick) * tick;
   }
 }
 

@@ -1,5 +1,7 @@
-import { order, PrismaClient, TradingType } from "@prisma/client";
+import { order, PrismaClient, TradingType, userStocks } from "@prisma/client";
 import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, userStockIncrease } from "./orders.util";
+import { BuyDto } from "../dtos/buy.dto";
+import { SellDto } from "../dtos/sell.dto";
 
   // submit == find
   export async function handleEqualMatch(
@@ -9,11 +11,11 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
     tradingType: TradingType,
     submitOrderScore,
     findOrderScore,
-    submitOrderNumber,
-    findOrderNumber,
-    searchCount,
-    userStockList, 
-    userStocks,
+    submitOrderNumber: bigint,
+    findOrderNumber: bigint,
+    searchCount: number,
+    userStockList: { update: number[] }, // accountId 저장
+    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
     orderToDelete
   ) {
     const increaseNumber = submitOrderNumber;
@@ -23,7 +25,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
     if (tradingType == 'buy') {
       [userStockList, userStocks] = await userStockIncrease(
         prisma, 
-        submitOrder.stock_id, submitOrder.account_id,
+        submitOrder.stockId, submitOrder.accountId,
         increaseNumber,
         userStockList,
         userStocks,
@@ -32,7 +34,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
 
       [userStockList, userStocks] = await userStockDecrease(
         prisma,
-        findOrder.stock_id, findOrder.account_id,
+        findOrder.stockId, findOrder.accountId,
         decreaseNumber,
         userStockList,
         userStocks,
@@ -44,7 +46,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
     } else {
       [userStockList, userStocks] = await userStockDecrease(
         prisma,
-        submitOrder.stock_id, submitOrder.account_id,
+        submitOrder.stockId, submitOrder.accountId,
         decreaseNumber,
         userStockList,
         userStocks,
@@ -53,7 +55,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
 
       [userStockList, userStocks] = await userStockIncrease(
         prisma,
-        findOrder.stock_id, findOrder.account_id,
+        findOrder.stockId, findOrder.accountId,
         increaseNumber,
         userStockList,
         userStocks,
@@ -70,16 +72,16 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
   // submit < find
   export async function handleRemainingMatch(
     prisma: PrismaClient,
-    data,
+    data: BuyDto | SellDto,
     submitOrder: order, 
     findOrder: order,
     tradingType: TradingType,
     submitOrderScore,
-    submitOrderNumber,
-    userStockList, 
-    userStocks,
+    submitOrderNumber: bigint,
+    userStockList: { update: number[] }, // accountId 저장
+    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
     orderToDelete,
-    redisKey
+    redisKey: string
   ) {
     const increaseNumber = submitOrderNumber;
     const decreaseNumber = submitOrderNumber;
@@ -89,7 +91,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
       //
       [userStockList, userStocks] = await userStockIncrease(
         prisma,
-        submitOrder.stock_id, submitOrder.account_id,
+        submitOrder.stockId, submitOrder.accountId,
         increaseNumber,
         userStockList,
         userStocks,
@@ -98,7 +100,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
 
       [userStockList, userStocks] = await userStockDecrease(
         prisma,
-        findOrder.stock_id, findOrder.account_id,
+        findOrder.stockId, findOrder.accountId,
         decreaseNumber,
         userStockList,
         userStocks,
@@ -109,7 +111,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
     } else {
       [userStockList, userStocks] = await userStockDecrease(
         prisma,
-        submitOrder.stock_id, submitOrder.account_id,
+        submitOrder.stockId, submitOrder.accountId,
         decreaseNumber,
         userStockList,
         userStocks,
@@ -118,7 +120,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
 
       [userStockList, userStocks] = await userStockIncrease(
         prisma,
-        findOrder.stock_id, findOrder.account_id,
+        findOrder.stockId, findOrder.accountId,
         increaseNumber,
         userStockList,
         userStocks,
@@ -138,12 +140,12 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
     submitOrder: order, 
     findOrder: order,
     tradingType: TradingType,
-    findOrderNumber,
-    findOrderScore,
-    userStockList, 
-    userStocks,
+    findOrderNumber: bigint,
+    findOrderScore: bigint,
+    userStockList: { update: number[] }, // accountId 저장
+    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
     orderToDelete,
-    searchCount
+    searchCount: number
   ) {
     const order = [findOrder];
     const increaseNumber = findOrderNumber;
@@ -153,7 +155,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
     if (tradingType == 'buy') {
       [userStockList, userStocks] = await userStockIncrease(
         prisma,
-        submitOrder.stock_id, submitOrder.account_id,
+        submitOrder.stockId, submitOrder.accountId,
         increaseNumber,
         userStockList,
         userStocks,
@@ -162,7 +164,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
 
       [userStockList, userStocks] = await userStockDecrease(
         prisma,
-        findOrder.stock_id, findOrder.account_id,
+        findOrder.stockId, findOrder.accountId,
         decreaseNumber,
         userStockList,
         userStocks,
@@ -173,7 +175,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
     } else {
       [userStockList, userStocks] = await userStockDecrease(
         prisma,
-        submitOrder.stock_id, submitOrder.account_id,
+        submitOrder.stockId, submitOrder.accountId,
         decreaseNumber,
         userStockList,
         userStocks,
@@ -182,7 +184,7 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
 
       [userStockList, userStocks] = await userStockIncrease(
         prisma,
-        findOrder.stock_id, findOrder.account_id,
+        findOrder.stockId, findOrder.accountId,
         increaseNumber,
         userStockList,
         userStocks,

@@ -1,4 +1,4 @@
-import { order, PrismaClient, user_stocks } from "@prisma/client";
+import { order, PrismaClient, userStocks } from "@prisma/client";
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 
@@ -32,21 +32,21 @@ export async function userStockIncrease(
     accountId: number,
     increaseNumber: bigint,
     userStockList: { update: number[] }, // accountId 저장
-    userStocks: Map<number, user_stocks>, // accountId, user_stocks 객체
-    buyPrice: number
-): Promise<[{ update: number[] }, Map<number, user_stocks>]> {
+    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
+    buyPrice: bigint
+): Promise<[{ update: number[] }, Map<number, userStocks>]> {
     const userStock = userStocks.get(accountId);
 
     // 첫 매수
     if (!userStock) {
-        userStocks.set(accountId, await prisma.user_stocks.create({
+        userStocks.set(accountId, await prisma.userStocks.create({
             data : {
-                account_id: accountId,
-                stock_id: stockId,
+                accountId: accountId,
+                stockId: stockId,
                 number: increaseNumber,
-                can_number: increaseNumber,
+                canNumber: increaseNumber,
                 average: buyPrice, 
-                total_buy_amount: BigInt(buyPrice) * increaseNumber
+                totalBuyAmount: buyPrice * increaseNumber
             }
         }));
     }
@@ -54,9 +54,9 @@ export async function userStockIncrease(
         userStocks.set(accountId, {
             ...userStock,
             number: userStock.number + increaseNumber,
-            can_number: userStock.can_number + increaseNumber,
-            average: Number(((BigInt(userStock.average) * userStock.number) + (BigInt(buyPrice) * increaseNumber)) / (userStock.number + increaseNumber)),
-            total_buy_amount: userStock.total_buy_amount + BigInt(buyPrice) * increaseNumber
+            canNumber: userStock.canNumber + increaseNumber,
+            average: ((userStock.average * userStock.number) + (buyPrice * increaseNumber)) / (userStock.number + increaseNumber),
+            totalBuyAmount: userStock.totalBuyAmount + buyPrice * increaseNumber
         });
 
         userStockList.update.push(accountId);
@@ -82,18 +82,18 @@ export async function userStockDecrease(
     accountId: number,
     decreaseNumber: bigint,
     userStockList: { update: number[] }, // accountId 저장
-    userStocks: Map<number, user_stocks>, // accountId, user_stocks 객체
+    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
     isFindOrder: boolean
-): Promise<[{ update: number[] }, Map<number, user_stocks>]> {
+): Promise<[{ update: number[] }, Map<number, userStocks>]> {
     const userStock = userStocks.get(accountId);
 
     // 더 이상 보유 수량이 없을때
     if (userStock.number - decreaseNumber == 0n) {
-        await prisma.user_stocks.delete({
+        await prisma.userStocks.delete({
             where : { 
-                account_id_stock_id: {
-                    account_id: accountId,
-                    stock_id: stockId
+                accountId_stockId: {
+                    accountId: accountId,
+                    stockId: stockId
                 } 
             }
         });
@@ -102,10 +102,10 @@ export async function userStockDecrease(
         userStocks.set(accountId, {
             ...userStock,
             number: userStock.number - decreaseNumber,
-            can_number: isFindOrder 
-                ? userStock.can_number
-                : userStock.can_number - decreaseNumber,
-            total_buy_amount: userStock.total_buy_amount - (BigInt(userStock.average) * decreaseNumber)
+            canNumber: isFindOrder 
+                ? userStock.canNumber
+                : userStock.canNumber - decreaseNumber,
+            totalBuyAmount: userStock.totalBuyAmount - (userStock.average * decreaseNumber)
         });
 
         userStockList.update.push(accountId);
@@ -126,7 +126,7 @@ export async function orderMatchAndRemainderUpdate(prisma, remainderOrder, compl
             id: remainderOrder.id
         },
         data: {
-            match_number: remainderOrder.match_number + (completeOrder.number - completeOrder.match_number)
+            matchNumber: remainderOrder.matchNumber + (completeOrder.number - completeOrder.matchNumber)
         }
     });
 }
@@ -141,7 +141,7 @@ export async function orderMatchAndRemainderUpdate(prisma, remainderOrder, compl
  * @param orders 
  * @param number 
  */
-export async function orderCompleteUpdate(prisma, orders, number?: bigint) {
+export async function orderCompleteUpdate(prisma: PrismaClient, orders, number?: bigint) {
     if (orders.length == 2) {
         for(let i = 0; i < orders.length; i++) {
             await prisma.order.update({
@@ -150,7 +150,7 @@ export async function orderCompleteUpdate(prisma, orders, number?: bigint) {
                 },
                 data: {
                     status: "y",
-                    match_number: orders[i].number
+                    matchNumber: orders[i].number
                 }
             });
         }
@@ -161,7 +161,7 @@ export async function orderCompleteUpdate(prisma, orders, number?: bigint) {
             },
             data: {
                 status: "y",
-                match_number: number
+                matchNumber: number
             }
         });
     }
@@ -184,19 +184,19 @@ export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) 
     });
 
     const today = dayjs().utc().format("YYYY-MM-DD");
-    const stockHistory = await prisma.stock_history.findUnique({
+    const stockHistory = await prisma.stockHistory.findUnique({
         where: {
-            stock_id_date: {
-                stock_id: data.stockId,
+            stockId_date: {
+                stockId: data.stockId,
                 date: new Date(today)
             }
         }
     });
 
     if (!stockHistory) {
-        await prisma.stock_history.create({
+        await prisma.stockHistory.create({
             data: {
-                stock_id: data.stockId,
+                stockId: data.stockId,
                 date: new Date(today),
                 low: updatePrice,
                 high: updatePrice,
@@ -207,10 +207,10 @@ export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) 
     }
     else {        
         if (stockHistory.low > updatePrice) {
-            await prisma.stock_history.update({
+            await prisma.stockHistory.update({
                 where: {
-                    stock_id_date: {
-                        stock_id: data.stockId,
+                    stockId_date: {
+                        stockId: data.stockId,
                         date: new Date(today)
                     }
                 },
@@ -220,10 +220,10 @@ export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) 
             });
         }
         if (stockHistory.high < updatePrice) {
-            await prisma.stock_history.update({
+            await prisma.stockHistory.update({
                 where: {
-                    stock_id_date: {
-                        stock_id: data.stockId,
+                    stockId_date: {
+                        stockId: data.stockId,
                         date: new Date(today)
                     }
                 },
@@ -233,10 +233,10 @@ export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) 
             });
         }
     
-        await prisma.stock_history.update({
+        await prisma.stockHistory.update({
             where: {
-                stock_id_date: {
-                    stock_id: data.stockId,
+                stockId_date: {
+                    stockId: data.stockId,
                     date: new Date(today)
                 }
             },
@@ -251,17 +251,17 @@ export function createOrderMatch(data, submitOrder, findOrder, isFindOrderBigger
     // 3번째 경우의 수: 제출한 주문의 수가 더 클때, 찾은 주문의 수가 모두 체결된것이기에 찾은 주문을 기준으로 number를 맞춰야 함
     if (isFindOrderBigger) {
         return {
-            stock_id: data.stockId,
-            number: findOrder.number - findOrder.match_number,
-            initial_order_id: findOrder.id,
-            order_id: submitOrder.id
+            stockId: data.stockId,
+            number: findOrder.number - findOrder.matchNumber,
+            initialOrderId: findOrder.id,
+            orderId: submitOrder.id
         }
     } else {
         return {
-            stock_id: data.stockId,
-            number: submitOrder.number - submitOrder.match_number,
-            initial_order_id: findOrder.id,
-            order_id: submitOrder.id
+            stockId: data.stockId,
+            number: submitOrder.number - submitOrder.matchNumber,
+            initialOrderId: findOrder.id,
+            orderId: submitOrder.id
         }
     }
 }

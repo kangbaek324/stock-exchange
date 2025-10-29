@@ -11,12 +11,12 @@ export class AccountService {
         let data = [];
         const accounts = await this.prismaService.accounts.findMany({
             where: {
-                user_id: user.id
+                userId: user.id
             }
         });
 
         for(let i = 0; i < accounts.length; i++) {
-            data.push(accounts[i].account_number);
+            data.push(accounts[i].accountNumber);
         }
 
         return data;
@@ -25,18 +25,18 @@ export class AccountService {
     async createAccount(user): Promise<unknown> {
         try {
             const before_account_number = await this.prismaService.accounts.findFirst({
-                orderBy : { created_at: "desc" },
-                select : { account_number: true }
+                orderBy : { createdAt: "desc" },
+                select : { accountNumber: true }
             });
             const response = await this.prismaService.accounts.create({
                 data : {
-                    user_id : user.id,
-                    account_number : ++before_account_number.account_number,
+                    userId : user.id,
+                    accountNumber : ++before_account_number.accountNumber,
                     money : 100000000
                 }
             });
             return {
-                accountNumber : response.account_number,
+                accountNumber : response.accountNumber,
                 money : response.money.toString()
             }
         } catch (err) {

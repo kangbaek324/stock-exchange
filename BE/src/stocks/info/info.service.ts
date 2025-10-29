@@ -1,21 +1,30 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 
 @Injectable()
 export class InfoService {
     constructor(
-        private readonly PrismaService: PrismaService
+        private readonly prismaService: PrismaService
     ) {}
 
     async getStockList() {
-        return await this.PrismaService.stocks.findMany();
+        const stocks = await this.prismaService.stocks.findMany();
+
+        return stocks.map(stock => ({
+            ...stock,
+            price: stock.price.toString(),
+        }));
+
     }
 
     async getSstockInfo(stockId: number) {
-        return await this.PrismaService.stocks.findUnique({
+        let stock = await this.prismaService.stocks.findUnique({
             where: {
                 id: stockId
             }
         });
+
+        return { ...stock, price: stock.price.toString() }
     }
 }
