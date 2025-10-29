@@ -114,7 +114,7 @@ export class OrdersService {
           where: { accountNumber: data.accountNumber },
           select: { id: true },
         });
-
+        
         if (data.orderType == 'market') data.price = 0;
 
         // 주문 생성
@@ -128,19 +128,19 @@ export class OrdersService {
             tradingType: 'buy',
           },
         });
-
+        
         // Redis 주문 저장
         const unixTime = Date.now(); // 밀리초 단위
         const score = data.price * 1_000_000_000_000 + unixTime;
-
+        
         jsonOrder = orderToJson(submitOrder);
-
+        
         await this.redis.zadd(
           `orderbook:${data.stockId}:buy`,
           score,
           jsonOrder,
         );
-
+        
         // 체결 가능 주문 탐색
         [result, accountUpdateList] = await this.ordersExecution.processSubmitOrder(
           prisma,
@@ -148,7 +148,7 @@ export class OrdersService {
           submitOrder,
           score,
         );
-
+        
         // 처리된 주문 Redis에서 삭제
         for (const sellScore of result.sell) {
           await this.redis.zremrangebyscore(
@@ -157,7 +157,7 @@ export class OrdersService {
             sellScore,
           );
         }
-
+        
         for (const buyScore of result.buy) {
           await this.redis.zremrangebyscore(
             `orderbook:${data.stockId}:buy`,
@@ -165,6 +165,7 @@ export class OrdersService {
             buyScore,
           );
         }
+
       });
     } catch (err) {
       await this.redis.zrem(`orderbook:${data.stockId}:buy`, jsonOrder);
@@ -172,7 +173,6 @@ export class OrdersService {
       console.error(err);
       throw new InternalServerErrorException('주문 처리중 오류가 발생했습니다');
     }
-
     // 웹 소켓 전송
     try {
       // 주식 가격 전송
@@ -193,6 +193,7 @@ export class OrdersService {
       for (let i = 0; i < userStocks.length; i++) {
         await this.websocket.accountUpdate(userStocks[i].accountId);
       }
+
     } catch (err) {
       console.error('웹소켓 전송오류' + err);
     }

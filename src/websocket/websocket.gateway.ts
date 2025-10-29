@@ -150,19 +150,6 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       price: stockInfoDB.price.toString()
     }
 
-    const stockHistoryDB = await this.prisma.stockHistory.findUnique({
-      where: { stockId_date: { stockId, date: new Date(today) } },
-    });
-
-    const { high, low, close, open, ...rest } = stockHistoryDB;
-    const stockHistory = {
-      ...rest,
-      high: high.toString(),
-      low: low.toString(),
-      close: close.toString(),
-      open: open.toString(),
-    };
-
     let previousClose;
     const previousCloseDB = await this.prisma.stockHistory.findUnique({
       where: {
@@ -176,6 +163,34 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       }
     });
     if (previousCloseDB) previousClose = previousCloseDB.close.toString();
+    else throw new Error("stock have not stockHistory");
+
+    let stockHistoryDB = await this.prisma.stockHistory.findUnique({
+      where: { stockId_date: { stockId, date: new Date(today) } },
+    });
+
+    if (!stockHistoryDB) {
+        stockHistoryDB = await this.prisma.stockHistory.create({
+            data: {
+                stockId: stockId,
+                date: new Date(today),
+                low: previousClose,
+                high: previousClose,
+                close: previousClose,
+                open: previousClose
+            }
+        })
+    }
+    
+    const stockHistory = {
+      stockId: stockHistoryDB.stockId,
+      data: new Date(today),
+      low: stockHistoryDB.low.toString(),
+      high: stockHistoryDB.high.toString(),
+      close: stockHistoryDB.close.toString(),
+      open: stockHistoryDB.open.toString()
+    }
+    
 
     let buyOrderbookData: any[] = await this.prisma.$queryRaw
     `
@@ -186,8 +201,6 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       ORDER BY price DESC
       LIMIT 10
     `
-
-    console.log(buyOrderbookData);
 
     let sellOrderbookData: any[] = await this.prisma.$queryRaw
     `
