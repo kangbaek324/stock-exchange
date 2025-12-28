@@ -10,24 +10,17 @@ import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { EditDto } from './dtos/edit.dto';
 import { order, PrismaClient, TradingType } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
-import { RedisService } from '@liaoliaots/nestjs-redis';
-import Redis from 'ioredis';
 import { orderToJson } from './utils/orders.util';
 
-// @TODO Redis가 죽었을때 상황을 처리해야함
 @Injectable()
 export class OrdersService {
-  private readonly redis: Redis | null;
-
   constructor(
     @Inject('ORDER_SERVICE') private client: ClientProxy,
     private readonly prisma: PrismaService,
     private readonly ordersValidation: OrdersValidationService,
     private readonly ordersExecution: OrdersExecutionService,
     private readonly websocket: WebsocketGateway,
-    private readonly redisService: RedisService,
   ) {
-    this.redis = this.redisService.getOrThrow();
   }
 
   async sendMQ(
@@ -102,7 +95,6 @@ export class OrdersService {
   // @TODO Redis 롤백 구현 가능
   async trade(data: BuyDto | SellDto, tradingType: TradingType) {
     let result;
-    let jsonOrder;
     let accountUpdateList;
 
     try {
@@ -127,55 +119,22 @@ export class OrdersService {
           },
         });
         
-        // Redis 주문 저장
-        const unixTime = Date.now(); // 밀리초 단위
-        const score = data.price * 1_000_000_000_000 + unixTime;
-        
-        jsonOrder = orderToJson(submitOrder);
-        
-        await this.redis.zadd(
-          `orderbook:${data.stockId}:${tradingType}`,
-          score,
-          jsonOrder,
-        );
-        
         // 체결 가능 주문 탐색
-        [result, accountUpdateList] = await this.ordersExecution.processSubmitOrder(
+        accountUpdateList = await this.ordersExecution.processSubmitOrder(
           prisma,
           data,
           submitOrder,
-          score,
         );
-        
-        // 처리된 주문 Redis에서 삭제
-        for (const sellScore of result.sell) {
-          await this.redis.zremrangebyscore(
-            `orderbook:${data.stockId}:sell`,
-            sellScore,
-            sellScore,
-          );
-        }
-        
-        for (const buyScore of result.buy) {
-          await this.redis.zremrangebyscore(
-            `orderbook:${data.stockId}:buy`,
-            buyScore,
-            buyScore,
-          );
-        }
       });
     } catch(err) {
-      await this.redis.zrem(`orderbook:${data.stockId}:${tradingType}`, jsonOrder);
-
       console.error(err);
       throw new InternalServerErrorException('주문 처리중 오류가 발생했습니다');
     }
 
-    // 웹 소켓 전송
     try {
       // 주식 가격 전송
       await this.websocket.stockUpdate(data.stockId);
-      
+
       // 계좌, 주문 현황 업데이트 사항 전송 (웹소켓)
       for (const accountId of accountUpdateList) {
         await this.websocket.accountUpdate(accountId);
@@ -188,6 +147,7 @@ export class OrdersService {
           stockId: data.stockId,
         },
       });
+      
       for (let i = 0; i < userStocks.length; i++) {
         await this.websocket.accountUpdate(userStocks[i].accountId);
       }
@@ -199,12 +159,10 @@ export class OrdersService {
 
   /**
    * @TODO
-   * Redis, DB중 하나라도 실패시 롤백 하는 로직 추가 필요,
    * 정정시 주문시 체결가능한 주식 탐색 로직 필요
-   * Score String화 필요
    */
   async edit(data: EditDto) {
-    let order: order, redisKey, beforeScore, newScore, beforeOrder, newOrder;
+    let order: order, redisKey, beforeOrder;
 
     try {
       // 기존 주문 조회
@@ -228,16 +186,6 @@ export class OrdersService {
           id: data.orderId,
         },
       });
-
-      newOrder = orderToJson(order);
-
-      // 주문 정정 (Redis)
-      beforeScore = await this.redis.zscore(redisKey, beforeOrder);
-
-      const unixTime = Date.now(); // 밀리초 단위
-      newScore = data.price * 1_000_000_000_000 + unixTime;
-      await this.redis.zremrangebyscore(redisKey, beforeScore, beforeScore);
-      await this.redis.zadd(redisKey, newScore, newOrder);
     } catch (err) {
       console.error(err);
       throw new InternalServerErrorException('주문 처리중 오류가 발생했습니다');
@@ -253,11 +201,6 @@ export class OrdersService {
     }
   }
 
-  /**
-   * @TODO
-   * Redis 롤백 구현 필요
-   * Score String화 필요
-   */
   async cancel(data: CancelDto) {
     let order: order;
 
@@ -268,15 +211,6 @@ export class OrdersService {
         order = await this.prisma.order.findFirst({
           where: { id: data.orderId },
         });
-
-        // 주문 취소 (Redis)
-        const redisKey =
-          order.tradingType == 'buy'
-            ? `orderbook:${order.stockId}:buy`
-            : `orderbook:${order.stockId}:sell`;
-
-        const jsonOrder = orderToJson(order);
-        await this.redis.zrem(redisKey, jsonOrder);
 
         // 주문 취소 (DB)
         order = await this.prisma.order.update({
