@@ -9,12 +9,14 @@ import { RouterModule } from '@nestjs/core';
 import { InfoModule } from './stocks/info/info.module';
 import { OrdersModule } from './stocks/orders/orders.module';
 import { AccountModule } from './stocks/account/account.module';
-import { RedisModule } from '@liaoliaots/nestjs-redis'
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    AuthModule, PrismaModule, StockModule, WebsocketModule,
+    AuthModule,
+    PrismaModule,
+    StockModule,
+    WebsocketModule,
     RouterModule.register([
       {
         path: 'stocks',
@@ -22,20 +24,12 @@ import { RedisModule } from '@liaoliaots/nestjs-redis'
         children: [
           { path: 'info', module: InfoModule },
           { path: 'orders', module: OrdersModule },
-          { path: 'account', module: AccountModule }
-        ]
-      }
+          { path: 'account', module: AccountModule },
+        ],
+      },
     ]),
-    RedisModule.forRoot({
-      config: {
-        host: 'localhost',
-        port: 6379,
-        password: '1234'
-      }
-    })
   ],
 })
-
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(LoggerMiddleware).forRoutes('*');
