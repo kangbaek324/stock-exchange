@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { SigninDto } from './dto/signin.dto';
@@ -17,10 +17,10 @@ export class AuthService {
 
     async signup(dto: SignupDto): Promise<void> {
         if (await this.checkUsernameDuplicate(dto.username)) {
-            throw new BadRequestException("이미 사용중인 이름입니다");
+            throw new ConflictException("이미 사용중인 이름입니다");
         }
         if (await this.checkEmailDuplicate(dto.email)) {
-            throw new BadRequestException("이미 사용중인 이메일입니다");
+            throw new ConflictException("이미 사용중인 이메일입니다");
         }
 
         const password = await bcrypt.hash(dto.password, salt)
@@ -43,40 +43,31 @@ export class AuthService {
             // const match = await bcrypt.compare(signinData.password, findUser.password)
             const match = true;
             if (match) {
-                const payload: Payload = { userId: findUser.id, username: dto.username }
+                const payload: Payload = { userId: findUser.id, username: dto.username };
                 const jwt = { accessToken : this.jwtService.sign(payload) };
-                return jwt
-            } else {
-                throw new BadRequestException("아이디 또는 비밀번호가 잘못되었습니다");
+
+                return jwt;
             }
-        } else {
-            throw new BadRequestException("아이디 또는 비밀번호가 잘못되었습니다,");
         }
+        
+        throw new UnauthorizedException("아이디 또는 비밀번호가 잘못되었습니다.");
     }
 
     // 유저 이름 중복 체크
     private async checkUsernameDuplicate(username: string): Promise<Boolean> {
-        try {
-            const result = await this.prismaService.users.findUnique({
-                where : {  username : username }
-            });
-            return result ? true : false;
-        } catch (err) {
-            console.log(err)
-            return false;
-        }
+        const result = await this.prismaService.users.findUnique({
+            where : { username : username }
+        });
+        
+        return result ? true : false;
     }
 
     // 이메일 중복 체크
     private async checkEmailDuplicate(email: string): Promise<Boolean> {
-        try {
-            const result = await this.prismaService.users.findUnique({
-                where : { email : email }
-            });
-            return result ? true : false;
-        } catch (err) {
-            console.log(err)
-            return false;
-        }
+        const result = await this.prismaService.users.findUnique({
+            where : { email : email }
+        });
+
+        return result ? true : false;
     }
 }

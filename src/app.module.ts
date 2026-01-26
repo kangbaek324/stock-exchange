@@ -30,6 +30,7 @@ import { AccountModule } from './stocks/account/account.module';
     ]),
   ],
 })
+
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(LoggerMiddleware).forRoutes('*');
