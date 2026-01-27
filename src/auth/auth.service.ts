@@ -16,6 +16,7 @@ export class AuthService {
     ) {}
 
     async signup(dto: SignupDto): Promise<void> {
+        // @TODO 커스텀 에러로 변경해야됨
         if (await this.checkUsernameDuplicate(dto.username)) {
             throw new ConflictException("이미 사용중인 이름입니다");
         }

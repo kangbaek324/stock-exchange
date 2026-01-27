@@ -1,19 +1,16 @@
 import { HttpException } from '@nestjs/common';
-import { AuthErrorCode, AuthErrorCodeKey } from './auth.error.code';
+import { AuthError, AuthErrorKey } from './auth.error';
 
 export class AuthException extends HttpException {
-  constructor(
-    readonly errorCodeKey: AuthErrorCodeKey,
-  ) {
-    const errorCode = AuthErrorCode[errorCodeKey];
+  constructor(errorKey: AuthErrorKey) {
+    const error = AuthError[errorKey];
 
     super(
       {
-        message: errorCode.message,
-        error: errorCodeKey,
-        statusCode: errorCode.status
+        message: error.message,
+        errorCode: error.code,
       },
-      errorCode.status
+      error.status,
     );
   }
 }
