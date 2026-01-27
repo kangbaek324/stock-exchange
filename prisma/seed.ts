@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   // 예제: 기본 사용자 데이터 삽입
-  await prisma.users.create({
+  await prisma.user.create({
     data : {
         username : "admin",
         password : "Strong@1!",
@@ -12,7 +12,7 @@ async function main() {
     }
   });
 
-  await prisma.accounts.create({
+  await prisma.account.create({
     data : {
         userId : 1,
         accountNumber : 1000,
@@ -20,7 +20,7 @@ async function main() {
     }
   });
 
-  await prisma.stocks.createMany({
+  await prisma.stock.createMany({
     data : [
         {name : "Nest소프트", price : 9500 }
     ]

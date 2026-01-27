@@ -8,7 +8,7 @@ import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { RouterModule } from '@nestjs/core';
 import { InfoModule } from './stocks/info/info.module';
 import { OrdersModule } from './stocks/orders/orders.module';
-import { AccountModule } from './stocks/account/account.module';
+import { AccountModule } from './account/account.module';
 
 @Module({
   imports: [
@@ -17,6 +17,7 @@ import { AccountModule } from './stocks/account/account.module';
     PrismaModule,
     StockModule,
     WebsocketModule,
+    AccountModule,
     RouterModule.register([
       {
         path: 'stocks',
@@ -24,7 +25,6 @@ import { AccountModule } from './stocks/account/account.module';
         children: [
           { path: 'info', module: InfoModule },
           { path: 'orders', module: OrdersModule },
-          { path: 'account', module: AccountModule },
         ],
       },
     ]),

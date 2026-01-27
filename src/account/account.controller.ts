@@ -1,10 +1,9 @@
 import { Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { Payload } from 'src/auth/interface/payload.interface';
 import { GetUser } from 'src/common/decorator/get-user.decorator';
 import { AccountService } from './account.service';
 
-@Controller()
+@Controller("account")
 @UseGuards(AuthGuard("jwt"))
 export class AccountController {
     constructor(
@@ -13,6 +12,7 @@ export class AccountController {
 
     @Get("/")
     async getMyAccountList(@GetUser() user) {
+        console.log(user);
         return this.accountService.getMyAccountList(user);
     }
 

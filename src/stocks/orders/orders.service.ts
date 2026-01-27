@@ -8,7 +8,7 @@ import { OrdersExecutionService } from './orders-execution.service';
 import { GetOrderDto } from './dtos/get-order.dto';
 import { WebsocketGateway } from 'src/websocket/websocket.gateway';
 import { EditDto } from './dtos/edit.dto';
-import { order, PrismaClient, TradingType } from '@prisma/client';
+import { Order, PrismaClient, TradingType } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { orderToJson } from './utils/orders.util';
 
@@ -59,7 +59,7 @@ export class OrdersService {
       throw new BadRequestException(resultMessage);
     }
     try {
-      const account = await this.prisma.accounts.findUnique({
+      const account = await this.prisma.account.findUnique({
         where: {
           accountNumber: query.accountnumber,
         },
@@ -100,7 +100,7 @@ export class OrdersService {
     try {
      await this.prisma.$transaction(async (prisma: PrismaClient) => {
         // 계좌 ID 조회
-        const account = await prisma.accounts.findUnique({
+        const account = await prisma.account.findUnique({
           where: { accountNumber: data.accountNumber },
           select: { id: true },
         });
@@ -142,7 +142,7 @@ export class OrdersService {
       }
 
       // 주식을 보유한 사람들의 잔고 업데이트
-      const userStocks = await this.prisma.userStocks.findMany({
+      const userStocks = await this.prisma.userStock.findMany({
         where: {
           stockId: data.stockId,
         },
@@ -162,7 +162,7 @@ export class OrdersService {
    * 정정시 주문시 체결가능한 주식 탐색 로직 필요
    */
   async edit(data: EditDto) {
-    let order: order, redisKey, beforeOrder;
+    let order: Order, redisKey, beforeOrder;
 
     try {
       // 기존 주문 조회
@@ -202,7 +202,7 @@ export class OrdersService {
   }
 
   async cancel(data: CancelDto) {
-    let order: order;
+    let order: Order;
 
     // 취소 주문
     try {
@@ -224,14 +224,14 @@ export class OrdersService {
 
         // 매도 주문일 경우 가능수량 수정
         if (order.tradingType == 'sell') {
-          const userStock = await this.prisma.userStocks.findFirst({
+          const userStock = await this.prisma.userStock.findFirst({
             where: {
               stockId: order.stockId,
               accountId: order.accountId,
             },
           });
 
-          await this.prisma.userStocks.update({
+          await this.prisma.userStock.update({
             where: {
               accountId_stockId: {
                 stockId: order.stockId,

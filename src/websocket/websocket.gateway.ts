@@ -84,7 +84,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         return false;
       }
       else {
-        const account = await this.prisma.accounts.findUnique({
+        const account = await this.prisma.account.findUnique({
           where : { accountNumber: accountNumber }
         });
     
@@ -110,7 +110,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
     else {
       // 최초 연결시 가장 처음 생성한 계좌를 기본계좌로 세팅
-      const basicAccount = await this.prisma.accounts.findFirst({
+      const basicAccount = await this.prisma.account.findFirst({
         where: { userId: userId },
         orderBy: { createdAt: "asc" }
       });
@@ -135,7 +135,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     const yesterday = dayjs().utc().subtract(1, "day").format("YYYY-MM-DD");
     let data = {};
 
-    const stockInfoDB = await this.prisma.stocks.findUnique({
+    const stockInfoDB = await this.prisma.stock.findUnique({
       where : {
         id : stockId
       },
@@ -247,7 +247,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
   // 내 계좌 업데이트 내역 전송
   public async accountUpdate(accountId: number) {
-    const userStock = await this.prisma.userStocks.findMany({
+    const userStock = await this.prisma.userStock.findMany({
       where: { accountId: accountId },
       select: {
         stockId: true,
@@ -263,7 +263,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       }
     });
 
-    const account = await this.prisma.accounts.findUnique({
+    const account = await this.prisma.account.findUnique({
       where: {
         id: accountId
       }
@@ -273,7 +273,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     let dataArray = [];
     
     for(let i = 0; i < userStock.length; i++) {
-      const price = await this.prisma.stocks.findUnique({
+      const price = await this.prisma.stock.findUnique({
         where: { id: userStock[i].stockId },
         select: { price: true }
       });

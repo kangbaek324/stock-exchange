@@ -23,42 +23,48 @@ enum status {
   c
 }
 
-model users {
+model User {
   id         Int      @id @default(autoincrement())
   username   String   @unique @db.VarChar(20)
   password   String   @db.VarChar(60)
   email      String   @unique @db.VarChar(50)
   createdAt DateTime @default(now()) @map("created_at")
 
-  accounts accounts[]
+  account Account[]
+
+  @@map("users")
 }
 
-model accounts {
+model Account {
   id             Int      @id @default(autoincrement())
   userId        Int      @map("user_id")
   accountNumber Int      @unique @map("account_number")
   money          BigInt
   createdAt     DateTime  @default(now()) @map("created_at")
 
-  userStocks userStocks[] @relation("UserStocksToAccounts")
-  order order[]
-  users users @relation(fields: [userId], references: [id])
+  userStocks UserStock[] @relation("UserStocksToAccounts")
+  order Order[]
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("accounts")
 }
 
-model stocks {
+model Stock {
   id    Int      @id @default(autoincrement())
   name  String   @unique @db.VarChar(30)
   price BigInt
   createdAt  DateTime @default(now()) @map("created_at")
   brokenAt   DateTime? @map("broken_at")
 
-  userStocks userStocks[] @relation("UserStocksToStocks")
-  order order[]
-  orderMatch orderMatch[]
-  stockHistory stockHistory[]
+  userStocks UserStock[] @relation("UserStocksToStocks")
+  order Order[]
+  orderMatch OrderMatch[]
+  stockHistory StockHistory[]
+
+  @@map("stocks")
 }
 
-model stockHistory {
+model StockHistory {
   stockId Int @map("stock_id")
   date     DateTime @db.Date 
   high     BigInt
@@ -66,13 +72,14 @@ model stockHistory {
   close    BigInt
   open     BigInt
   
-  stock stocks @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
   @@id([stockId, date])
+
   @@map("stock_history")
 }
 
 
-model userStocks {
+model UserStock {
   accountId Int @map("account_id")
   stockId   Int @map("stock_id")
   number     BigInt
@@ -80,13 +87,13 @@ model userStocks {
   average    BigInt
   totalBuyAmount BigInt @default(0) @map("total_buy_amount")
 
-  accounts accounts @relation("UserStocksToAccounts", fields: [accountId], references: [id])
-  stocks stocks @relation("UserStocksToStocks", fields: [stockId], references: [id])
+  accounts Account @relation("UserStocksToAccounts", fields: [accountId], references: [id])
+  stocks Stock @relation("UserStocksToStocks", fields: [stockId], references: [id])
   @@id([accountId, stockId])
   @@map("user_stocks")
 }
 
-model order {
+model Order {
   id           Int         @id @default(autoincrement())
   accountId   Int @map("account_id")
   stockId     Int @map("stock_id")
@@ -98,14 +105,14 @@ model order {
   tradingType TradingType @map("trading_type")
   createdAt   DateTime    @default(now()) @map("created_at")
 
-  orderMatchA orderMatch[] @relation("OrderAsInitial")
-  orderMatchB orderMatch[] @relation("OrderAsMatched")
+  orderMatchA OrderMatch[] @relation("OrderAsInitial")
+  orderMatchB OrderMatch[] @relation("OrderAsMatched")
 
-  accounts accounts @relation(fields: [accountId], references: [id])
-  stocks stocks @relation(fields: [stockId], references: [id])
+  accounts Account @relation(fields: [accountId], references: [id])
+  stocks Stock @relation(fields: [stockId], references: [id])
 }
 
-model orderMatch {
+model OrderMatch {
   id               Int      @id @default(autoincrement())
   stockId          Int @map("stock_id")
   number           BigInt
@@ -113,9 +120,9 @@ model orderMatch {
   orderId         Int @map("order_id")
   matchedAt       DateTime @default(now()) @map("matched_at")
 
-  stocks stocks @relation(fields: [stockId], references: [id])
-  orderA order @relation("OrderAsInitial", fields: [initialOrderId], references: [id])
-  orderB order @relation("OrderAsMatched", fields: [orderId], references: [id])
+  stocks Stock @relation(fields: [stockId], references: [id])
+  orderA Order @relation("OrderAsInitial", fields: [initialOrderId], references: [id])
+  orderB Order @relation("OrderAsMatched", fields: [orderId], references: [id])
 
   @@map("order_match")
 }

@@ -36,7 +36,7 @@ export class OrdersValidationService {
     }
   
     async accountCheck(data) {
-      return await this.prisma.accounts.findUnique({
+      return await this.prisma.account.findUnique({
         where: { accountNumber: data.accountNumber },
         select : { 
           userId : true,
@@ -66,7 +66,7 @@ export class OrdersValidationService {
       } else if (accountCheck.userId != user.id) {
         return "요청한 계좌의 유저정보와 요청한 유저가 동일하지 않습니다";
       }
-      const stockIdCheck = await this.prisma.stocks.findUnique({
+      const stockIdCheck = await this.prisma.stock.findUnique({
         where: { id: data.stockId },
         select: { id: true }
       });
@@ -84,7 +84,7 @@ export class OrdersValidationService {
         }
       }
       else {        
-        const userStocks = await this.prisma.userStocks.findFirst({
+        const userStocks = await this.prisma.userStock.findFirst({
           where : { accountId : accountCheck.id, stockId : data.stockId }
         });
 

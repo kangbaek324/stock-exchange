@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { SigninDto } from './dto/signin.dto';
 import { SignupDto } from './dto/signup.dto';
 import { JwtService } from '@nestjs/jwt';
-import { Payload } from './interface/payload.interface';
+import { UserPayload } from './interface/user-payload.interface';
 
 const salt = 10;
 
@@ -24,7 +24,7 @@ export class AuthService {
         }
 
         const password = await bcrypt.hash(dto.password, salt)
-        await this.prismaService.users.create({ 
+        await this.prismaService.user.create({ 
             data : {
                 username : dto.username,
                 password : password,
@@ -33,8 +33,9 @@ export class AuthService {
         });
     }
 
+    // @TODO RefreshToken 추가 해야됨
     async signin(dto: SigninDto): Promise<unknown> {
-        let findUser = await this.prismaService.users.findUnique({
+        let findUser = await this.prismaService.user.findUnique({
             where : { username : dto.username },
         })
 
@@ -43,7 +44,7 @@ export class AuthService {
             // const match = await bcrypt.compare(signinData.password, findUser.password)
             const match = true;
             if (match) {
-                const payload: Payload = { userId: findUser.id, username: dto.username };
+                const payload: UserPayload = { userId: findUser.id, username: dto.username };
                 const jwt = { accessToken : this.jwtService.sign(payload) };
 
                 return jwt;
@@ -55,7 +56,7 @@ export class AuthService {
 
     // 유저 이름 중복 체크
     private async checkUsernameDuplicate(username: string): Promise<Boolean> {
-        const result = await this.prismaService.users.findUnique({
+        const result = await this.prismaService.user.findUnique({
             where : { username : username }
         });
         
@@ -64,7 +65,7 @@ export class AuthService {
 
     // 이메일 중복 체크
     private async checkEmailDuplicate(email: string): Promise<Boolean> {
-        const result = await this.prismaService.users.findUnique({
+        const result = await this.prismaService.user.findUnique({
             where : { email : email }
         });
 
