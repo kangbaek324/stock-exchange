@@ -1,9 +1,9 @@
-import { Body, Controller, Post, Res, UseGuards, UseInterceptors } from '@nestjs/common';
-import { SignupDto } from './dtos/signup.dto';
-import { SigninDto } from './dtos/signin.dto';
+import { Body, Controller, Post, UseInterceptors } from '@nestjs/common';
+import { SignupDto } from './dto/signup.dto';
+import { SigninDto } from './dto/signin.dto';
 import { AuthService } from './auth.service';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { jwtInterceptor } from './interceptors/jwt.interceptor';
+import { jwtInterceptor } from './interceptor/jwt.interceptor';
 
 @ApiTags("auth")
 @Controller("auth")

@@ -8,13 +8,16 @@ import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { RouterModule } from '@nestjs/core';
 import { InfoModule } from './stocks/info/info.module';
 import { OrdersModule } from './stocks/orders/orders.module';
-import { AccountModule } from './stocks/account/account.module';
-import { RedisModule } from '@liaoliaots/nestjs-redis'
+import { AccountModule } from './account/account.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    AuthModule, PrismaModule, StockModule, WebsocketModule,
+    AuthModule,
+    PrismaModule,
+    StockModule,
+    WebsocketModule,
+    AccountModule,
     RouterModule.register([
       {
         path: 'stocks',
@@ -22,17 +25,9 @@ import { RedisModule } from '@liaoliaots/nestjs-redis'
         children: [
           { path: 'info', module: InfoModule },
           { path: 'orders', module: OrdersModule },
-          { path: 'account', module: AccountModule }
-        ]
-      }
+        ],
+      },
     ]),
-    RedisModule.forRoot({
-      config: {
-        host: 'localhost',
-        port: 6379,
-        password: '1234'
-      }
-    })
   ],
 })
 

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BuyDto } from './dtos/buy.dto';
 import { SellDto } from './dtos/sell.dto';
-import { order, PrismaClient, TradingType, userStocks } from '@prisma/client';
+import { Order, PrismaClient, TradingType, UserStock } from '@prisma/client';
 import * as utils from './utils/orders.util';
 import { handleEqualMatch, handlePartialMatch } from './utils/handleMatch';
 import { handleRemainingMatch } from './utils/handleMatch';
@@ -46,7 +46,7 @@ export class OrdersExecutionService {
     prisma: PrismaClient,
     data: BuyDto | SellDto,
     userStockList: { update: number[] },
-    userStocks: Map<number, userStocks>,
+    userStocks: Map<number, UserStock>,
     createMatchList,
     nextStockPrice: bigint,
   ) {
@@ -58,7 +58,7 @@ export class OrdersExecutionService {
 
     // 계좌 잔고 업데이트
     for (const accountId of userStockList.update) {
-      await prisma.userStocks.update({
+      await prisma.userStock.update({
         where: {
           accountId_stockId: {
             accountId: accountId,
@@ -73,11 +73,11 @@ export class OrdersExecutionService {
   async processSubmitOrder(
     prisma: PrismaClient,
     data: BuyDto | SellDto,
-    submitOrder: order,
+    submitOrder: Order,
   ) {
     const tradingType = submitOrder.tradingType;
 
-    let findOrder: order, nextStockPrice: bigint;
+    let findOrder: Order, nextStockPrice: bigint;
     let createMatchList = [];
 
     // 웹소켓을 보내야 하는 계좌 리스트
@@ -87,11 +87,11 @@ export class OrdersExecutionService {
     isInAccountUpdateList.set(submitOrder.accountId, true);
 
     let userStockList: { update: number[] } = { update: [] }; // accountId 저장
-    let userStocks = new Map<number, userStocks>(); // accountId, user_stocks 객체, 이름 stocks로 바꿔야됨
+    let userStocks = new Map<number, UserStock>(); // accountId, user_stocks 객체, 이름 stocks로 바꿔야됨
 
     // 메모리에 제출한 주문 등록
     if (!userStocks.get(submitOrder.accountId)) {
-      const userStockForSubmitOrder = await prisma.userStocks.findUnique({
+      const userStockForSubmitOrder = await prisma.userStock.findUnique({
         where: {
           accountId_stockId: {
             accountId: submitOrder.accountId,
@@ -110,7 +110,7 @@ export class OrdersExecutionService {
       if (findOrder) {
         // 찾은 주문 메모리에 저장
         if (!userStocks.get(findOrder.accountId)) {
-          const userStockForFindOrder = await prisma.userStocks.findUnique({
+          const userStockForFindOrder = await prisma.userStock.findUnique({
             where: {
               accountId_stockId: {
                 accountId: findOrder.accountId,
@@ -221,7 +221,7 @@ export class OrdersExecutionService {
         // 유저가 가진 주식 조회
         let userStock = userStocks.get(submitOrder.accountId);
         if (!userStock) {
-          userStock = await prisma.userStocks.findUnique({
+          userStock = await prisma.userStock.findUnique({
             where: {
               accountId_stockId: {
                 accountId: submitOrder.accountId,
@@ -258,7 +258,7 @@ export class OrdersExecutionService {
         }
 
         if (!nextStockPrice) {
-          const stock = await prisma.stocks.findUnique({
+          const stock = await prisma.stock.findUnique({
             where: { id: data.stockId },
           });
 

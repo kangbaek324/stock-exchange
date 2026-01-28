@@ -3,7 +3,7 @@ import { OrdersService } from './orders.service';
 import { AuthGuard } from '@nestjs/passport';
 import { BuyDto } from './dtos/buy.dto';
 import { SellDto } from './dtos/sell.dto';
-import { GetUser } from 'src/common/decorator/get-user.decorator';
+import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { EditDto } from './dtos/edit.dto';
 import { CancelDto } from './dtos/cancel.dto';
 import { GetOrderDto } from './dtos/get-order.dto';

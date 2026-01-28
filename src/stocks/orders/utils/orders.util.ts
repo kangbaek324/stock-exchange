@@ -1,4 +1,4 @@
-import { order, PrismaClient, userStocks } from "@prisma/client";
+import { PrismaClient, UserStock } from "@prisma/client";
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 
@@ -32,14 +32,14 @@ export async function userStockIncrease(
     accountId: number,
     increaseNumber: bigint,
     userStockList: { update: number[] }, // accountId 저장
-    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
+    userStocks: Map<number, UserStock>, // accountId, user_stocks 객체
     buyPrice: bigint
-): Promise<[{ update: number[] }, Map<number, userStocks>]> {
+): Promise<[{ update: number[] }, Map<number, UserStock>]> {
     const userStock = userStocks.get(accountId);
 
     // 첫 매수
     if (!userStock) {
-        userStocks.set(accountId, await prisma.userStocks.create({
+        userStocks.set(accountId, await prisma.userStock.create({
             data : {
                 accountId: accountId,
                 stockId: stockId,
@@ -82,14 +82,14 @@ export async function userStockDecrease(
     accountId: number,
     decreaseNumber: bigint,
     userStockList: { update: number[] }, // accountId 저장
-    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
+    userStocks: Map<number, UserStock>, // accountId, user_stocks 객체
     isFindOrder: boolean
-): Promise<[{ update: number[] }, Map<number, userStocks>]> {
+): Promise<[{ update: number[] }, Map<number, UserStock>]> {
     const userStock = userStocks.get(accountId);
 
     // 더 이상 보유 수량이 없을때
     if (userStock.number - decreaseNumber == 0n) {
-        await prisma.userStocks.delete({
+        await prisma.userStock.delete({
             where : { 
                 accountId_stockId: {
                     accountId: accountId,
@@ -176,7 +176,7 @@ export async function orderCompleteUpdate(prisma: PrismaClient, orders, number?:
  * @param updatePrice 
  */
 export async function stockPriceUpdate(prisma: PrismaClient, data, updatePrice) {
-    await prisma.stocks.update({
+    await prisma.stock.update({
         where: { id : data.stockId },
         data: {
             price : updatePrice

@@ -4,6 +4,8 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import * as cookieParser from 'cookie-parser'; 
+import { SuccessResponseInterceptor } from './common/interceptors/success-response.interceptor';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -53,6 +55,9 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
+
+  app.useGlobalInterceptors(new SuccessResponseInterceptor());
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   await app.startAllMicroservices();
   await app.listen(3000);

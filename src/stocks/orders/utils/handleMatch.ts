@@ -1,17 +1,17 @@
-import { order, PrismaClient, TradingType, userStocks } from "@prisma/client";
+import { Order, PrismaClient, TradingType, UserStock } from "@prisma/client";
 import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, userStockIncrease } from "./orders.util";
 
   // submit == find
   export async function handleEqualMatch(
     prisma: PrismaClient,
-    submitOrder: order,
-    findOrder: order,
+    submitOrder: Order,
+    findOrder: Order,
     tradingType: TradingType,
     submitOrderNumber: bigint,
     findOrderNumber: bigint,
     userStockList: { update: number[] }, // accountId 저장
-    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
-  ): Promise<[{ update: number[] }, Map<number, userStocks>]> {
+    userStocks: Map<number, UserStock>, // accountId, user_stocks 객체
+  ): Promise<[{ update: number[] }, Map<number, UserStock>]> {
     const increaseNumber = submitOrderNumber;
     const decreaseNumber = findOrderNumber;
 
@@ -64,13 +64,13 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
   // submit < find
   export async function handleRemainingMatch(
     prisma: PrismaClient,
-    submitOrder: order,
-    findOrder: order,
+    submitOrder: Order,
+    findOrder: Order,
     tradingType: TradingType,
     submitOrderNumber: bigint,
     userStockList: { update: number[] }, // accountId 저장
-    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
-  ): Promise<[{ update: number[] }, Map<number, userStocks>]> {
+    userStocks: Map<number, UserStock>, // accountId, user_stocks 객체
+  ): Promise<[{ update: number[] }, Map<number, UserStock>]> {
     const increaseNumber = submitOrderNumber;
     const decreaseNumber = submitOrderNumber;
 
@@ -123,13 +123,13 @@ import { orderCompleteUpdate, orderMatchAndRemainderUpdate, userStockDecrease, u
   // submit > find
   export async function handlePartialMatch(
     prisma: PrismaClient,
-    submitOrder: order,
-    findOrder: order,
+    submitOrder: Order,
+    findOrder: Order,
     tradingType: TradingType,
     findOrderNumber: bigint,
     userStockList: { update: number[] }, // accountId 저장
-    userStocks: Map<number, userStocks>, // accountId, user_stocks 객체
-  ): Promise<[{ update: number[] }, Map<number, userStocks>]> {
+    userStocks: Map<number, UserStock>, // accountId, user_stocks 객체
+  ): Promise<[{ update: number[] }, Map<number, UserStock>]> {
     const order = [findOrder];
     const increaseNumber = findOrderNumber;
     const decreaseNumber = findOrderNumber;

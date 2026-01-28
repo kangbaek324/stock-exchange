@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 
 @Injectable()
@@ -9,7 +8,7 @@ export class InfoService {
     ) {}
 
     async getStockList() {
-        const stocks = await this.prismaService.stocks.findMany();
+        const stocks = await this.prismaService.stock.findMany();
 
         return stocks.map(stock => ({
             ...stock,
@@ -19,7 +18,7 @@ export class InfoService {
     }
 
     async getSstockInfo(stockId: number) {
-        let stock = await this.prismaService.stocks.findUnique({
+        let stock = await this.prismaService.stock.findUnique({
             where: {
                 id: stockId
             }
