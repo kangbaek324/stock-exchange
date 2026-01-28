@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { BuyDto } from './dto/buy.dto';
-import { SellDto } from './dto/sell.dto';
 import { EditDto } from './dto/edit.dto';
 import { CancelDto } from './dto/cancel.dto';
+import { BuyOrder } from './type/buy.type';
+import { SellOrder } from './type/sell.type';
+import { TradingType, User } from '@prisma/client';
+import { GetOrderDto } from './dto/get-order.dto';
+import { EditOrder } from './type/edit.type';
+import { CancelOrder } from './type/cancel.type';
 
 @Injectable()
 export class OrderValidationService {
@@ -30,9 +34,9 @@ export class OrderValidationService {
         }
     }
 
-    async accountCheck(data) {
+    private async accountCheck(accountNumber: number) {
         return await this.prisma.account.findUnique({
-            where: { accountNumber: data.accountNumber },
+            where: { accountNumber: accountNumber },
             select: {
                 userId: true,
                 id: true,
@@ -41,8 +45,8 @@ export class OrderValidationService {
         });
     }
 
-    async getOrderValidate(query, user) {
-        const accountCheck = await this.accountCheck(query);
+    async getOrderValidate(query: GetOrderDto, user: User) {
+        const accountCheck = await this.accountCheck(query.accountnumber);
         if (!accountCheck) {
             return '존재하지 않는 계좌 번호입니다';
         } else if (accountCheck.userId != user.id) {
@@ -50,17 +54,19 @@ export class OrderValidationService {
         }
     }
 
-    async buySellValidate(data: BuyDto | SellDto, user, tradingType) {
-        let tickSizeCheck = await this.tickSizeCheck(data.price);
+    async buySellValidate(data: BuyOrder | SellOrder, user: User, tradingType: TradingType) {
+        let tickSizeCheck = this.tickSizeCheck(data.price);
         if (tickSizeCheck) {
             return tickSizeCheck;
         }
-        const accountCheck = await this.accountCheck(data);
+
+        const accountCheck = await this.accountCheck(data.accountNumber);
         if (!accountCheck) {
             return '존재하지 않는 계좌번호입니다';
         } else if (accountCheck.userId != user.id) {
             return '요청한 계좌의 유저정보와 요청한 유저가 동일하지 않습니다';
         }
+
         const stockIdCheck = await this.prisma.stock.findUnique({
             where: { id: data.stockId },
             select: { id: true },
@@ -75,6 +81,7 @@ export class OrderValidationService {
 
         if (tradingType == 'buy') {
             if (accountCheck.money < BigInt(data.price * data.number)) {
+                // @TODO 테스트를 위한 주석
                 // return "돈이 부족합니다";
             }
         } else {
@@ -88,12 +95,12 @@ export class OrderValidationService {
         }
     }
 
-    async editValidate(data: EditDto, user) {
-        let tickSizeCheck = await this.tickSizeCheck(data.price);
+    async editValidate(data: EditOrder, user: User) {
+        let tickSizeCheck = this.tickSizeCheck(data.price);
         if (tickSizeCheck) {
             return tickSizeCheck;
         }
-        const accountCheck = await this.accountCheck(data);
+        const accountCheck = await this.accountCheck(data.accountNumber);
         if (!accountCheck) {
             return '존재하지 않는 계좌번호입니다';
         } else if (accountCheck.userId != user.id) {
@@ -121,8 +128,8 @@ export class OrderValidationService {
         }
     }
 
-    async cancelValidate(data: CancelDto, user) {
-        const accountCheck = await this.accountCheck(data);
+    async cancelValidate(data: CancelOrder, user: User) {
+        const accountCheck = await this.accountCheck(data.accountNumber);
         if (!accountCheck) {
             return '존재하지 않는 계좌번호입니다';
         } else if (accountCheck.userId != user.id) {
