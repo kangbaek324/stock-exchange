@@ -11,28 +11,27 @@ import { OrdersModule } from './stocks/orders/orders.module';
 import { AccountModule } from './account/account.module';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    AuthModule,
-    PrismaModule,
-    StockModule,
-    WebsocketModule,
-    AccountModule,
-    RouterModule.register([
-      {
-        path: 'stocks',
-        module: StockModule,
-        children: [
-          { path: 'info', module: InfoModule },
-          { path: 'orders', module: OrdersModule },
-        ],
-      },
-    ]),
-  ],
+    imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        AuthModule,
+        PrismaModule,
+        StockModule,
+        WebsocketModule,
+        AccountModule,
+        RouterModule.register([
+            {
+                path: 'stocks',
+                module: StockModule,
+                children: [
+                    { path: 'info', module: InfoModule },
+                    { path: 'orders', module: OrdersModule },
+                ],
+            },
+        ]),
+    ],
 })
-
 export class AppModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggerMiddleware).forRoutes('*');
-  }
+    configure(consumer: MiddlewareConsumer) {
+        consumer.apply(LoggerMiddleware).forRoutes('*');
+    }
 }
