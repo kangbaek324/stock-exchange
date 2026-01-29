@@ -1,13 +1,13 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { BuyDto } from './dto/buy.dto';
-import { SellDto } from './dto/sell.dto';
-import { CancelDto } from './dto/cancel.dto';
 import { GetOrderDto } from './dto/get-order.dto';
-import { EditDto } from './dto/edit.dto';
 import { ClientProxy } from '@nestjs/microservices';
 import { User } from '@prisma/client';
 import { OrderValidationService } from './order-validation.service';
+import { BuyOrder } from './type/buy.type';
+import { SellOrder } from './type/sell.type';
+import { CancelOrder } from './type/cancel.type';
+import { EditOrder } from './type/edit.type';
 
 @Injectable()
 export class OrderService {
@@ -18,7 +18,7 @@ export class OrderService {
     ) {}
 
     async sendMQ(
-        data: BuyDto | SellDto | CancelDto | EditDto,
+        data: BuyOrder | SellOrder | CancelOrder | EditOrder,
         user: User,
         type: 'buy' | 'sell' | 'cancel' | 'edit',
     ) {
