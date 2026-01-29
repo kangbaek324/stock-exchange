@@ -17,17 +17,17 @@ enum TradingType {
   sell
 }
 
-enum status {
+enum OrderStatus {
   y
   n
   c
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
-  username   String   @unique @db.VarChar(20)
-  password   String   @db.VarChar(60)
-  email      String   @unique @db.VarChar(50)
+  id        Int      @id @default(autoincrement())
+  username  String   @unique @db.VarChar(20)
+  password  String   @db.VarChar(60)
+  email     String   @unique @db.VarChar(50)
   createdAt DateTime @default(now()) @map("created_at")
 
   account Account[]
@@ -36,94 +36,95 @@ model User {
 }
 
 model Account {
-  id             Int      @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   userId        Int      @map("user_id")
   accountNumber Int      @unique @map("account_number")
-  money          BigInt
-  createdAt     DateTime  @default(now()) @map("created_at")
+  money         BigInt
+  createdAt     DateTime @default(now()) @map("created_at")
 
   userStocks UserStock[] @relation("UserStocksToAccounts")
-  order Order[]
-  user User @relation(fields: [userId], references: [id])
+  order      Order[]
+  user       User        @relation(fields: [userId], references: [id])
 
   @@map("accounts")
 }
 
 model Stock {
-  id    Int      @id @default(autoincrement())
-  name  String   @unique @db.VarChar(30)
-  price BigInt
-  createdAt  DateTime @default(now()) @map("created_at")
-  brokenAt   DateTime? @map("broken_at")
+  id        Int       @id @default(autoincrement())
+  name      String    @unique @db.VarChar(30)
+  price     BigInt
+  createdAt DateTime  @default(now()) @map("created_at")
+  brokenAt  DateTime? @map("broken_at")
 
-  userStocks UserStock[] @relation("UserStocksToStocks")
-  order Order[]
-  orderMatch OrderMatch[]
+  userStocks   UserStock[]    @relation("UserStocksToStocks")
+  order        Order[]
+  orderMatch   OrderMatch[]
   stockHistory StockHistory[]
 
   @@map("stocks")
 }
 
 model StockHistory {
-  stockId Int @map("stock_id")
-  date     DateTime @db.Date 
-  high     BigInt
-  low      BigInt
-  close    BigInt
-  open     BigInt
-  
-  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
-  @@id([stockId, date])
+  stockId Int      @map("stock_id")
+  date    DateTime @db.Date
+  high    BigInt
+  low     BigInt
+  close   BigInt
+  open    BigInt
 
-  @@map("stock_history")
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@id([stockId, date])
+  @@map("stock_histories")
 }
 
-
 model UserStock {
-  accountId Int @map("account_id")
-  stockId   Int @map("stock_id")
-  number     BigInt
-  canNumber BigInt @map("can_number")
-  average    BigInt
+  accountId      Int    @map("account_id")
+  stockId        Int    @map("stock_id")
+  number         BigInt
+  canNumber      BigInt @map("can_number")
+  average        BigInt
   totalBuyAmount BigInt @default(0) @map("total_buy_amount")
 
   accounts Account @relation("UserStocksToAccounts", fields: [accountId], references: [id])
-  stocks Stock @relation("UserStocksToStocks", fields: [stockId], references: [id])
+  stocks   Stock   @relation("UserStocksToStocks", fields: [stockId], references: [id])
+
   @@id([accountId, stockId])
   @@map("user_stocks")
 }
 
 model Order {
-  id           Int         @id @default(autoincrement())
-  accountId   Int @map("account_id")
-  stockId     Int @map("stock_id")
-  price        BigInt
-  number       BigInt
-  matchNumber BigInt? @default(0) @map("match_number")
-  orderType   OrderType @map("order_type")
-  status       status?     @default(n)
-  tradingType TradingType @map("trading_type")
-  createdAt   DateTime    @default(now()) @map("created_at")
+  id          Int          @id @default(autoincrement())
+  accountId   Int          @map("account_id")
+  stockId     Int          @map("stock_id")
+  price       BigInt
+  number      BigInt
+  matchNumber BigInt?      @default(0) @map("match_number")
+  orderType   OrderType    @map("order_type")
+  status      OrderStatus? @default(n)
+  tradingType TradingType  @map("trading_type")
+  createdAt   DateTime     @default(now()) @map("created_at")
 
   orderMatchA OrderMatch[] @relation("OrderAsInitial")
   orderMatchB OrderMatch[] @relation("OrderAsMatched")
 
   accounts Account @relation(fields: [accountId], references: [id])
-  stocks Stock @relation(fields: [stockId], references: [id])
+  stocks   Stock   @relation(fields: [stockId], references: [id])
+
+  @@map("orders")
 }
 
 model OrderMatch {
-  id               Int      @id @default(autoincrement())
-  stockId          Int @map("stock_id")
-  number           BigInt
-  initialOrderId Int @map("initial_order_id")
-  orderId         Int @map("order_id")
-  matchedAt       DateTime @default(now()) @map("matched_at")
+  id             Int      @id @default(autoincrement())
+  stockId        Int      @map("stock_id")
+  number         BigInt
+  initialOrderId Int      @map("initial_order_id")
+  orderId        Int      @map("order_id")
+  matchedAt      DateTime @default(now()) @map("matched_at")
 
   stocks Stock @relation(fields: [stockId], references: [id])
   orderA Order @relation("OrderAsInitial", fields: [initialOrderId], references: [id])
   orderB Order @relation("OrderAsMatched", fields: [orderId], references: [id])
 
-  @@map("order_match")
+  @@map("order_matches")
 }
-

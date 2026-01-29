@@ -2,12 +2,9 @@ import { MiddlewareConsumer, Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { WebsocketModule } from './websocket/websocket.module';
-import { StockModule } from './stocks/stock.module';
+import { StockModule } from './stock/stock.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
-import { RouterModule } from '@nestjs/core';
-import { InfoModule } from './stocks/info/info.module';
-import { OrdersModule } from './stocks/orders/orders.module';
 import { AccountModule } from './account/account.module';
 
 @Module({
@@ -18,16 +15,6 @@ import { AccountModule } from './account/account.module';
         StockModule,
         WebsocketModule,
         AccountModule,
-        RouterModule.register([
-            {
-                path: 'stocks',
-                module: StockModule,
-                children: [
-                    { path: 'info', module: InfoModule },
-                    { path: 'orders', module: OrdersModule },
-                ],
-            },
-        ]),
     ],
 })
 export class AppModule {

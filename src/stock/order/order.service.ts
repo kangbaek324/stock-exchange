@@ -1,20 +1,20 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { BuyDto } from './dtos/buy.dto';
-import { SellDto } from './dtos/sell.dto';
-import { CancelDto } from './dtos/cancel.dto';
-import { OrdersValidationService } from './orders-validation.service';
-import { GetOrderDto } from './dtos/get-order.dto';
-import { EditDto } from './dtos/edit.dto';
+import { BuyDto } from './dto/buy.dto';
+import { SellDto } from './dto/sell.dto';
+import { CancelDto } from './dto/cancel.dto';
+import { GetOrderDto } from './dto/get-order.dto';
+import { EditDto } from './dto/edit.dto';
 import { ClientProxy } from '@nestjs/microservices';
 import { User } from '@prisma/client';
+import { OrderValidationService } from './order-validation.service';
 
 @Injectable()
-export class OrdersService {
+export class OrderService {
     constructor(
         @Inject('ORDER_SERVICE') private client: ClientProxy,
         private readonly prisma: PrismaService,
-        private readonly ordersValidation: OrdersValidationService,
+        private readonly orderValidation: OrderValidationService,
     ) {}
 
     async sendMQ(
@@ -37,10 +37,7 @@ export class OrdersService {
     }
 
     async getOrder(query: GetOrderDto, user: User) {
-        const resultMessage = await this.ordersValidation.getOrderValidate(query, user);
-        if (resultMessage) {
-            throw new BadRequestException(resultMessage);
-        }
+        await this.orderValidation.getOrderValidate(query, user);
 
         const account = await this.prisma.account.findUnique({
             where: {
@@ -51,7 +48,7 @@ export class OrdersService {
             },
         });
 
-        const findConditions: any = {
+        let findConditions: any = {
             accountId: account.id,
         };
 
