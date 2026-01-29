@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards, Body, BadRequestException, Param } from '@nestjs/common';
+import { Controller, Post, UseGuards, Body, Param } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { BuyDto } from './dto/buy.dto';
 import { SellDto } from './dto/sell.dto';
@@ -25,11 +25,7 @@ export class StockOrderController {
             ...dto,
             stockId: id,
         };
-        const resultMessage = await this.orderValidationService.buySellValidate(data, user, 'buy');
-
-        if (resultMessage) {
-            throw new BadRequestException(resultMessage);
-        }
+        await this.orderValidationService.buySellValidate(data, user, 'buy');
 
         return await this.orderService.sendMQ(data, user, 'buy');
     }
@@ -44,11 +40,7 @@ export class StockOrderController {
             ...dto,
             stockId: id,
         };
-        const resultMessage = await this.orderValidationService.buySellValidate(data, user, 'sell');
-
-        if (resultMessage) {
-            throw new BadRequestException(resultMessage);
-        }
+        await this.orderValidationService.buySellValidate(data, user, 'sell');
 
         return this.orderService.sendMQ(data, user, 'sell');
     }

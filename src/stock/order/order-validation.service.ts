@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { EditDto } from './dto/edit.dto';
-import { CancelDto } from './dto/cancel.dto';
 import { BuyOrder } from './type/buy.type';
 import { SellOrder } from './type/sell.type';
-import { TradingType, User } from '@prisma/client';
+import { OrderStatus, TradingType, User } from '@prisma/client';
 import { GetOrderDto } from './dto/get-order.dto';
 import { EditOrder } from './type/edit.type';
 import { CancelOrder } from './type/cancel.type';
+import { StockException } from '../error/stock.exception';
+import { OrderException } from './error/order.exception';
+import { AccountException } from 'src/account/error/account.exception';
 
 @Injectable()
 export class OrderValidationService {
@@ -29,13 +30,11 @@ export class OrderValidationService {
             if (price % 1000 !== 0) check = true;
         }
 
-        if (check) {
-            return '잘못된 호가 단위 입니다';
-        }
+        if (check) throw new OrderException('INVALID_ORDER_TICK_SIZE');
     }
 
-    private async accountCheck(accountNumber: number) {
-        return await this.prisma.account.findUnique({
+    private async getAccount(accountNumber: number) {
+        const account = await this.prisma.account.findUnique({
             where: { accountNumber: accountNumber },
             select: {
                 userId: true,
@@ -43,70 +42,65 @@ export class OrderValidationService {
                 money: true,
             },
         });
+
+        if (!account) throw new AccountException('ACCOUNT_NOT_FOUND');
+        else return account;
     }
 
     async getOrderValidate(query: GetOrderDto, user: User) {
-        const accountCheck = await this.accountCheck(query.accountnumber);
-        if (!accountCheck) {
-            return '존재하지 않는 계좌 번호입니다';
-        } else if (accountCheck.userId != user.id) {
-            return '요청한 계좌의 유저정보와 요청한 유저가 동일하지 않습니다';
+        const account = await this.getAccount(query.accountnumber);
+
+        if (account.userId !== user.id) {
+            throw new AccountException('ACCOUNT_FORBIDDEN');
         }
     }
 
     async buySellValidate(data: BuyOrder | SellOrder, user: User, tradingType: TradingType) {
-        let tickSizeCheck = this.tickSizeCheck(data.price);
-        if (tickSizeCheck) {
-            return tickSizeCheck;
-        }
+        this.tickSizeCheck(data.price);
 
-        const accountCheck = await this.accountCheck(data.accountNumber);
-        if (!accountCheck) {
-            return '존재하지 않는 계좌번호입니다';
-        } else if (accountCheck.userId != user.id) {
-            return '요청한 계좌의 유저정보와 요청한 유저가 동일하지 않습니다';
+        const account = await this.getAccount(data.accountNumber);
+        if (account.userId !== user.id) {
+            throw new AccountException('ACCOUNT_FORBIDDEN');
         }
 
         const stockIdCheck = await this.prisma.stock.findUnique({
             where: { id: data.stockId },
             select: { id: true },
         });
+
         if (!stockIdCheck) {
-            return '존재하지 않는 종목번호 입니다';
+            throw new StockException('STOCK_NOT_FOUND');
         } else if (data.price <= 0) {
-            return '0원 이하의 주문은 불가능 합니다';
+            throw new OrderException('INVALID_ORDER_PRICE');
         } else if (data.number <= 0) {
-            return '0주 이하의 주문은 불가능 합니다';
+            throw new OrderException('INVALID_ORDER_NUMBER');
         }
 
         if (tradingType == 'buy') {
-            if (accountCheck.money < BigInt(data.price * data.number)) {
+            if (account.money < BigInt(data.price * data.number)) {
                 // @TODO 테스트를 위한 주석
-                // return "돈이 부족합니다";
+                // throw new OrderException('NOT_ENOUGH_MONEY');
             }
         } else {
             const userStocks = await this.prisma.userStock.findFirst({
-                where: { accountId: accountCheck.id, stockId: data.stockId },
+                where: { accountId: account.id, stockId: data.stockId },
             });
 
             if (!userStocks || userStocks.canNumber < data.number) {
-                return '보유한 주식이 모자랍니다';
+                throw new OrderException('NOT_ENOUGH_STOCK');
             }
         }
     }
 
     async editValidate(data: EditOrder, user: User) {
-        let tickSizeCheck = this.tickSizeCheck(data.price);
-        if (tickSizeCheck) {
-            return tickSizeCheck;
+        this.tickSizeCheck(data.price);
+
+        const account = await this.getAccount(data.accountNumber);
+        if (account.userId !== user.id) {
+            throw new AccountException('ACCOUNT_FORBIDDEN');
         }
-        const accountCheck = await this.accountCheck(data.accountNumber);
-        if (!accountCheck) {
-            return '존재하지 않는 계좌번호입니다';
-        } else if (accountCheck.userId != user.id) {
-            return '요청한 계좌의 유저정보와 요청한 유저가 동일하지 않습니다';
-        }
-        const orderCheck = await this.prisma.order.findUnique({
+
+        const order = await this.prisma.order.findUnique({
             where: {
                 id: data.orderId,
             },
@@ -115,27 +109,25 @@ export class OrderValidationService {
                 status: true,
             },
         });
-        if (!orderCheck) {
-            return '존재하지 않는 주문입니다';
-        } else if (orderCheck.accountId != accountCheck.id) {
-            return '요청한 계좌와 주문이 접수된 계좌가 다릅니다';
-        } else if (orderCheck.status == 'c') {
-            return '취소된 주문은 정정할수 없습니다';
-        } else if (orderCheck.status == 'y') {
-            return '이미 체결된 주문은 정정할수 없습니다';
+
+        if (!order) {
+            throw new OrderException('ORDER_NOT_FOUND');
+        } else if (order.accountId !== account.id) {
+            throw new OrderException('ORDER_FORBIDDEN');
+        } else if (order.status === OrderStatus.y || order.status === OrderStatus.c) {
+            throw new OrderException('ALREADY_PROCESSED_ORDER');
         } else if (data.price <= 0) {
-            return '0원 이하로 정정할수 없습니다';
+            throw new OrderException('INVALID_ORDER_PRICE');
         }
     }
 
     async cancelValidate(data: CancelOrder, user: User) {
-        const accountCheck = await this.accountCheck(data.accountNumber);
-        if (!accountCheck) {
-            return '존재하지 않는 계좌번호입니다';
-        } else if (accountCheck.userId != user.id) {
-            return '요청한 계좌의 유저정보와 요청한 유저가 동일하지 않습니다';
+        const account = await this.getAccount(data.accountNumber);
+        if (account.userId !== user.id) {
+            throw new AccountException('ACCOUNT_FORBIDDEN');
         }
-        const orderCheck = await this.prisma.order.findUnique({
+
+        const order = await this.prisma.order.findUnique({
             where: {
                 id: data.orderId,
             },
@@ -144,14 +136,13 @@ export class OrderValidationService {
                 status: true,
             },
         });
-        if (!orderCheck) {
-            return '존재하지 않는 주문입니다';
-        } else if (orderCheck.accountId != accountCheck.id) {
-            return '요청한 계좌의 유저정보와 요청한 유저가 동일하지 않습니다';
-        } else if (orderCheck.status == 'y') {
-            return '이미 체결된 주문은 취소할 수 없습니다';
-        } else if (orderCheck.status == 'c') {
-            return '이미 취소된 주문입니다';
+
+        if (!order) {
+            throw new OrderException('ORDER_NOT_FOUND');
+        } else if (order.accountId !== account.id) {
+            throw new OrderException('ORDER_FORBIDDEN');
+        } else if (order.status === OrderStatus.y || order.status === OrderStatus.c) {
+            throw new OrderException('ALREADY_PROCESSED_ORDER');
         }
     }
 }

@@ -37,10 +37,7 @@ export class OrderService {
     }
 
     async getOrder(query: GetOrderDto, user: User) {
-        const resultMessage = await this.orderValidation.getOrderValidate(query, user);
-        if (resultMessage) {
-            throw new BadRequestException(resultMessage);
-        }
+        await this.orderValidation.getOrderValidate(query, user);
 
         const account = await this.prisma.account.findUnique({
             where: {

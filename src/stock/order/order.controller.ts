@@ -41,11 +41,7 @@ export class OrderController {
             ...dto,
             orderId: id,
         };
-        const resultMessage = await this.orderValidationService.editValidate(data, user);
-
-        if (resultMessage) {
-            throw new BadRequestException(resultMessage);
-        }
+        await this.orderValidationService.editValidate(data, user);
 
         return this.orderService.sendMQ(data, user, 'edit');
     }
@@ -60,11 +56,7 @@ export class OrderController {
             ...dto,
             orderId: id,
         };
-        const resultMessage = await this.orderValidationService.cancelValidate(data, user);
-
-        if (resultMessage) {
-            throw new BadRequestException(resultMessage);
-        }
+        await this.orderValidationService.cancelValidate(data, user);
 
         return this.orderService.sendMQ(data, user, 'cancel');
     }
