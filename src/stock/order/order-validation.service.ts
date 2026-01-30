@@ -33,7 +33,7 @@ export class OrderValidationService {
         if (check) throw new OrderException('INVALID_ORDER_TICK_SIZE');
     }
 
-    private async getAccount(accountNumber: number) {
+    async getAccount(accountNumber: number) {
         const account = await this.prisma.account.findUnique({
             where: { accountNumber: accountNumber },
             select: {

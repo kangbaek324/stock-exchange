@@ -17,7 +17,7 @@ export class OrderService {
         private readonly orderValidation: OrderValidationService,
     ) {}
 
-    async sendMQ(
+    sendMQ(
         data: BuyOrder | SellOrder | CancelOrder | EditOrder,
         user: User,
         type: 'buy' | 'sell' | 'cancel' | 'edit',
