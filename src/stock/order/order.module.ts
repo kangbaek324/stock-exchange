@@ -17,6 +17,7 @@ import { StockOrderController } from './stock-order.controller';
                     queueOptions: {
                         durable: true,
                     },
+                    persistent: true,
                 },
             },
         ]),
