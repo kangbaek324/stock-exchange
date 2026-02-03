@@ -1,10 +1,10 @@
 import { Global, Module } from '@nestjs/common';
 import { WebsocketGateway } from './websocket.gateway';
-import { WebsocketMqController } from './websoket.mq.controller';
+import { OrderEventConsumer } from './consumer/order-event.consumer';
 
 @Global()
 @Module({
-    controllers: [WebsocketMqController],
+    controllers: [OrderEventConsumer],
     providers: [WebsocketGateway],
     exports: [WebsocketGateway],
 })

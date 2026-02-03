@@ -1,9 +1,9 @@
 import { Controller } from '@nestjs/common';
 import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
-import { OrderEventedData } from './type/order-evented-data.type';
+import { OrderEventedData } from '../type/order-evented-data.type';
 
 @Controller()
-export class WebsocketMqController {
+export class OrderEventConsumer {
     @EventPattern('order.evented')
     async orderEvented(@Payload() mqData: OrderEventedData, @Ctx() context: RmqContext) {
         const channel = context.getChannelRef();
