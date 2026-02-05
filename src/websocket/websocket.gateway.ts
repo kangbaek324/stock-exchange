@@ -60,8 +60,9 @@ export class WebsocketGateway
     @SubscribeMessage('joinAccountRoom')
     async handleJoinAccountRoom(
         @ConnectedSocket() client: CustomSocket,
-        @MessageBody() accountNumber?: number,
+        @MessageBody() accountId?: number,
     ) {
-        this.accountWsService.onJoinAccountRoom(client, accountNumber);
+        this.accountWsService.onJoinAccountRoom(client, accountId);
+        this.accountWsService.updateAccount(accountId);
     }
 }

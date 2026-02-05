@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { OrderStatus } from '@prisma/client';
 import { Server } from 'socket.io';
+import { getKstDateToday } from 'src/common/helpers/get-kst-date-today';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 
 @Injectable()
@@ -12,14 +14,20 @@ export class OrderWsService {
     }
 
     // 내 주문 업데이트 내역 전송
-    public async orderStatus(accountId: number) {
+    async updateOrderInit(accountId: number) {
         let returnData = {
             executionOrder: [],
             noExecutionOrder: [],
         };
 
+        const todayKST = getKstDateToday();
+
         let executionOrder = await this.prismaService.order.findMany({
-            where: { accountId: accountId, status: 'y' },
+            where: {
+                accountId: accountId,
+                status: OrderStatus.y,
+                createdAt: { gte: todayKST },
+            },
             orderBy: { createdAt: 'desc' },
             include: {
                 stocks: {
@@ -28,11 +36,10 @@ export class OrderWsService {
                     },
                 },
             },
-            take: 10,
         });
 
         let noExecutionOrder = await this.prismaService.order.findMany({
-            where: { accountId: accountId, status: 'n' },
+            where: { accountId: accountId, status: OrderStatus.n },
             orderBy: { createdAt: 'desc' },
             include: {
                 stocks: {
@@ -43,36 +50,35 @@ export class OrderWsService {
             },
         });
 
-        for (let i = 0; i < executionOrder.length; i++) {
-            let data = {
-                id: executionOrder[i].id,
-                stockName: executionOrder[i].stocks.name,
-                stockId: executionOrder[i].stockId,
-                price: executionOrder[i].price.toString(),
-                number: executionOrder[i].number.toString(),
-                matchNumber: executionOrder[i].matchNumber.toString(),
-                status: executionOrder[i].status,
-                tradingType: executionOrder[i].tradingType,
-            };
+        const toOrderData = (order: (typeof executionOrder)[number]) => ({
+            id: order.id,
+            stockName: order.stocks.name,
+            stockId: order.stockId,
+            price: order.price.toString(),
+            number: order.number.toString(),
+            matchNumber: order.matchNumber.toString(),
+            status: order.status,
+            tradingType: order.tradingType,
+        });
 
-            returnData.executionOrder.push(data);
-        }
+        returnData.executionOrder = executionOrder.map(toOrderData);
+        returnData.noExecutionOrder = noExecutionOrder.map(toOrderData);
 
-        for (let i = 0; i < noExecutionOrder.length; i++) {
-            let data = {
-                id: noExecutionOrder[i].id,
-                stockName: noExecutionOrder[i].stocks.name,
-                stockId: noExecutionOrder[i].stockId,
-                price: noExecutionOrder[i].price.toString(),
-                number: noExecutionOrder[i].number.toString(),
-                matchNumber: noExecutionOrder[i].matchNumber.toString(),
-                status: noExecutionOrder[i].status,
-                tradingType: noExecutionOrder[i].tradingType,
-            };
+        this.server.to('accountId_' + accountId).emit('orderInit', returnData);
+    }
 
-            returnData.noExecutionOrder.push(data);
-        }
+    async updateOrder(accountId: number, orderId: number) {
+        const order = await this.prismaService.order.findUnique({
+            where: { id: orderId },
+        });
 
-        this.server.to('accountId_' + accountId).emit('myOrderUpdated', returnData);
+        const returnData = {
+            ...order,
+            number: order.number.toString(),
+            matchNumber: order.matchNumber.toString(),
+            price: order.price.toString(),
+        };
+
+        this.server.to('accountId_' + accountId).emit('orderUpdated', returnData);
     }
 }

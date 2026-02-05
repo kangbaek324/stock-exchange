@@ -14,13 +14,13 @@ export class AccountWsService {
         this.server = server;
     }
 
-    async onJoinAccountRoom(client: CustomSocket, accountNumber: number) {
+    async onJoinAccountRoom(client: CustomSocket, accountId: number) {
         const userId = client.user.userId;
         let account: Account;
 
-        if (accountNumber) {
+        if (accountId) {
             account = await this.prismaService.account.findUnique({
-                where: { accountNumber: accountNumber },
+                where: { id: accountId },
             });
         } else {
             // AccountNumber 없이 들어온다면 첫번째로 생성한 계좌로 구독
