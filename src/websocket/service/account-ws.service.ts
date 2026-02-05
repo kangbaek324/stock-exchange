@@ -3,6 +3,7 @@ import { PrismaService } from 'src/common/prisma/prisma.service';
 import { CustomSocket } from '../interface/custom-socket.interface';
 import { Account } from '@prisma/client';
 import { Server } from 'socket.io';
+import { WebsocketException } from '../error/websocket.exception';
 
 @Injectable()
 export class AccountWsService {
@@ -13,13 +14,7 @@ export class AccountWsService {
         this.server = server;
     }
 
-    // @TODO 에러 CODE 정리 필요
     async onJoinAccountRoom(client: CustomSocket, accountNumber: number) {
-        const error = {
-            code: 'WEBSOCKET_000',
-            message: '',
-        };
-
         const userId = client.user.userId;
         let account: Account;
 
@@ -35,70 +30,57 @@ export class AccountWsService {
             });
         }
 
-        if (!account) error.message = '존재하지 않는 계좌 입니다.';
+        if (!account) throw new WebsocketException('ACCOUNT_NOT_FOUND');
+        if (account.userId !== userId) throw new WebsocketException('ACCOUNT_FORBIDDEN');
 
-        if (account.userId === userId) {
-            client.join('accountId_' + account.id);
-        } else {
-            error.message = '접근 권한이 없습니다.';
-        }
-
-        if (error.message) {
-            client.emit(error.code, { message: error.message });
-            client.disconnect();
-            return false;
-        }
+        client.join('accountId_' + account.id);
     }
 
-    async updateAccountInit() {}
-
-    async updateAccount() {}
-
     // 내 계좌 업데이트 내역 전송
-    async accountUpdate(accountId: number) {
+    async updateAccount(accountId: number) {
+        const account = await this.prismaService.account.findUnique({
+            where: {
+                id: accountId,
+            },
+            select: {
+                id: true,
+                accountNumber: true,
+                money: true,
+            },
+        });
+
         const userStock = await this.prismaService.userStock.findMany({
             where: { accountId: accountId },
             select: {
-                stockId: true,
                 number: true,
                 canNumber: true,
                 average: true,
                 totalBuyAmount: true,
                 stocks: {
                     select: {
+                        id: true,
                         name: true,
+                        price: true,
                     },
                 },
             },
         });
 
-        const account = await this.prismaService.account.findUnique({
-            where: {
-                id: accountId,
+        const data = {
+            account: {
+                ...account,
+                money: account.money.toString(),
             },
-        });
+            userStock: userStock.map((stock) => ({
+                ...stock,
+                totalBuyAmount: stock.totalBuyAmount.toString(),
+                stocks: {
+                    ...stock.stocks,
+                    price: stock.stocks.price.toString(),
+                },
+            })),
+        };
 
-        let data;
-        let dataArray = [];
-
-        for (let i = 0; i < userStock.length; i++) {
-            const price = await this.prismaService.stock.findUnique({
-                where: { id: userStock[i].stockId },
-                select: { price: true },
-            });
-            data = {
-                name: userStock[i].stocks.name,
-                nowPrice: price.price.toString(),
-                amount: userStock[i].number.toString(),
-                canAmount: userStock[i].canNumber.toString(),
-                average: userStock[i].average.toString(),
-                totalBuyAmount: userStock[i].totalBuyAmount.toString(),
-            };
-            dataArray.push(data);
-        }
-
-        dataArray.push({ money: account.money.toString() });
-
-        this.server.to('accountId_' + accountId).emit('accountUpdated', dataArray);
+        this.server.to('accountId_' + accountId).emit('accountUpdated', data);
     }
 }
