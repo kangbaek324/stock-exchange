@@ -57,12 +57,19 @@ export class WebsocketGateway
         this.stockWsService.onJoinStockRoom(stockId, client);
     }
 
+    @SubscribeMessage('joinStockPriceRoom')
+    handleJoinStockPriceRoom(
+        @MessageBody() stockId: number,
+        @ConnectedSocket() client: CustomSocket,
+    ) {
+        this.stockWsService.onJoinStockPriceRoom(stockId, client);
+    }
+
     @SubscribeMessage('joinAccountRoom')
-    async handleJoinAccountRoom(
+    handleJoinAccountRoom(
         @ConnectedSocket() client: CustomSocket,
         @MessageBody() accountId?: number,
     ) {
         this.accountWsService.onJoinAccountRoom(client, accountId);
-        this.accountWsService.updateAccount(accountId);
     }
 }

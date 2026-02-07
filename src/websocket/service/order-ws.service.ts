@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { Server } from 'socket.io';
-import { getKstDateToday } from 'src/common/helpers/get-kst-date-today';
+import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 
 @Injectable()
@@ -20,7 +20,7 @@ export class OrderWsService {
             noExecutionOrder: [],
         };
 
-        const todayKST = getKstDateToday();
+        const todayKST = getKstDate();
 
         let executionOrder = await this.prismaService.order.findMany({
             where: {

@@ -34,6 +34,8 @@ export class AccountWsService {
         if (account.userId !== userId) throw new WebsocketException('ACCOUNT_FORBIDDEN');
 
         client.join('accountId_' + account.id);
+
+        await this.updateAccount(accountId);
     }
 
     // 내 계좌 업데이트 내역 전송
