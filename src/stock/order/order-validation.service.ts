@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { BuyOrder } from './type/buy.type';
 import { SellOrder } from './type/sell.type';
-import { OrderStatus, TradingType, User } from '@prisma/client';
+import { OrderStatus, OrderType, TradingType, User } from '@prisma/client';
 import { GetOrderDto } from './dto/get-order.dto';
 import { EditOrder } from './type/edit.type';
 import { CancelOrder } from './type/cancel.type';
@@ -55,7 +55,11 @@ export class OrderValidationService {
         }
     }
 
-    async buySellValidate(data: BuyOrder | SellOrder, user: User, tradingType: TradingType) {
+    async buySellValidate(
+        data: BuyOrder | SellOrder,
+        user: User,
+        tradingType: TradingType,
+    ) {
         this.tickSizeCheck(data.price);
 
         const account = await this.getAccount(data.accountNumber);
@@ -70,7 +74,7 @@ export class OrderValidationService {
 
         if (!stockIdCheck) {
             throw new StockException('STOCK_NOT_FOUND');
-        } else if (data.price <= 0) {
+        } else if (data.price <= 0 && data.orderType === OrderType.limit) {
             throw new OrderException('INVALID_ORDER_PRICE');
         } else if (data.number <= 0) {
             throw new OrderException('INVALID_ORDER_NUMBER');

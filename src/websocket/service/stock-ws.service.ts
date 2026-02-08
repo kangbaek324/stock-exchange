@@ -45,7 +45,7 @@ export class StockWsService {
 
         // 가격 정보 조회
         let stockHistoryDB = await this.prismaService.stockHistory.findUnique({
-            where: { stockId_date: { stockId, date: today } },
+            where: { stockId_date: { stockId: stockId, date: today } },
         });
 
         const stockHistory = {
@@ -121,6 +121,7 @@ export class StockWsService {
             match: matchData,
         };
 
+        // console.log(data);
         this.server.to('stockId_' + stockInfo.id.toString()).emit('stockUpdated', data);
     }
 
@@ -135,6 +136,6 @@ export class StockWsService {
 
         this.server
             .to('stockId_price_' + stockId.toString())
-            .emit('stockUpdated', stockPrice);
+            .emit('stockPriceUpdated', stockPrice);
     }
 }

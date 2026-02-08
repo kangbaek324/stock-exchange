@@ -24,10 +24,10 @@ export class OrderEventConsumer {
             await this.stockWsService.updateStockPrice(mqData.stockId);
 
             // 주문 업데이트
-            for (let i = 0; i++; i < mqData.updatedOrders.length) {
+            for (let i = 0; i < mqData.updatedOrders.length; i++) {
                 const order = mqData.updatedOrders[i];
-                this.orderWsService.updateOrder(order.accountId, order.id);
-                this.accountWsService.updateAccount(order.accountId);
+                await this.orderWsService.updateOrder(order.accountId, order.id);
+                await this.accountWsService.updateAccount(order.accountId);
             }
         } catch (err) {
             console.error(err);

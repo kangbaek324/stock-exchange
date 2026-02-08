@@ -4,11 +4,15 @@ import { CustomSocket } from '../interface/custom-socket.interface';
 import { Account } from '@prisma/client';
 import { Server } from 'socket.io';
 import { WebsocketException } from '../error/websocket.exception';
+import { OrderWsService } from './order-ws.service';
 
 @Injectable()
 export class AccountWsService {
     private server: Server;
-    constructor(private readonly prismaService: PrismaService) {}
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly orderWsService: OrderWsService,
+    ) {}
 
     setServer(server: Server) {
         this.server = server;
@@ -36,6 +40,7 @@ export class AccountWsService {
         client.join('accountId_' + account.id);
 
         await this.updateAccount(accountId);
+        await this.orderWsService.updateOrderInit(accountId);
     }
 
     // 내 계좌 업데이트 내역 전송
@@ -75,6 +80,9 @@ export class AccountWsService {
             },
             userStock: userStock.map((stock) => ({
                 ...stock,
+                number: stock.number.toString(),
+                canNumber: stock.canNumber.toString(),
+                average: stock.average.toString(),
                 totalBuyAmount: stock.totalBuyAmount.toString(),
                 stocks: {
                     ...stock.stocks,
