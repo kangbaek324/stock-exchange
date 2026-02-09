@@ -65,7 +65,7 @@ export class StockWsService {
             },
             select: { close: true },
         });
-        let previousClose = previousCloseDB?.close.toString() ?? stockInfo.price;
+        let previousClose = previousCloseDB?.close.toString() ?? stockHistory.open;
 
         // 호가창 조회
         let buyOrderbook: any[] = await this.prismaService.$queryRaw`
