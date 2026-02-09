@@ -4,7 +4,7 @@ import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { AccountService } from './account.service';
 import { User } from '@prisma/client';
 
-@Controller('account')
+@Controller('accounts')
 @UseGuards(AuthGuard('jwt'))
 export class AccountController {
     constructor(private readonly accountService: AccountService) {}

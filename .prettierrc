@@ -6,6 +6,6 @@
   "tabWidth": 4,
   "useTabs": false,
 
-  "printWidth": 100,
+  "printWidth": 90,
   "proseWrap": "never"
 }
