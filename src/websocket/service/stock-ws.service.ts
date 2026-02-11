@@ -89,7 +89,7 @@ export class StockWsService {
         let matchData: any[] = await this.prismaService.$queryRaw`
           select (select price from orders o where o.id = om.initial_order_id) as price, number, (select trading_type from orders o where o.id = om.order_id) as type
           from order_matches om where stock_id = ${stockId}
-          order by matched_at desc limit 20;
+          order by matched_at desc limit 50;
         `;
 
         buyOrderbook = buyOrderbook.map((row) => ({
@@ -121,7 +121,6 @@ export class StockWsService {
             match: matchData,
         };
 
-        // console.log(data);
         this.server.to('stockId_' + stockInfo.id.toString()).emit('stockUpdated', data);
     }
 
