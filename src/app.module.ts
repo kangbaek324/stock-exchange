@@ -7,11 +7,13 @@ import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { AccountModule } from './account/account.module';
 import { AppController } from './app.controller';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
     controllers: [AppController],
     imports: [
         ConfigModule.forRoot({ isGlobal: true }),
+        ScheduleModule.forRoot(),
         AuthModule,
         PrismaModule,
         StockModule,
