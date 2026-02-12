@@ -33,8 +33,6 @@ async function bootstrap() {
             queueOptions: {
                 durable: true,
             },
-            prefetchCount: 1,
-            noAck: false,
         },
     });
 

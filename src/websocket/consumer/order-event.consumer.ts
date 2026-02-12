@@ -38,8 +38,6 @@ export class OrderEventConsumer {
             }
         } catch (err) {
             console.error(err);
-        } finally {
-            channel.ack(originalMsg);
         }
     }
 }
