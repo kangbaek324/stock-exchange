@@ -6,8 +6,10 @@ import { StockModule } from './stock/stock.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { AccountModule } from './account/account.module';
+import { AppController } from './app.controller';
 
 @Module({
+    controllers: [AppController],
     imports: [
         ConfigModule.forRoot({ isGlobal: true }),
         AuthModule,
