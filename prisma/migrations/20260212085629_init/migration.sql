@@ -1,37 +1,39 @@
-/*
-  Warnings:
+-- CreateTable
+CREATE TABLE `users` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `username` VARCHAR(20) NOT NULL,
+    `password` VARCHAR(60) NOT NULL,
+    `email` VARCHAR(50) NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-  - You are about to drop the `order` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `order_match` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `stock_history` table. If the table is not empty, all the data it contains will be lost.
+    UNIQUE INDEX `users_username_key`(`username`),
+    UNIQUE INDEX `users_email_key`(`email`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-*/
--- DropForeignKey
-ALTER TABLE `order` DROP FOREIGN KEY `Order_account_id_fkey`;
+-- CreateTable
+CREATE TABLE `accounts` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `user_id` INTEGER NOT NULL,
+    `account_number` INTEGER NOT NULL,
+    `money` BIGINT NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
--- DropForeignKey
-ALTER TABLE `order` DROP FOREIGN KEY `Order_stock_id_fkey`;
+    UNIQUE INDEX `accounts_account_number_key`(`account_number`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- DropForeignKey
-ALTER TABLE `order_match` DROP FOREIGN KEY `order_match_initial_order_id_fkey`;
+-- CreateTable
+CREATE TABLE `stocks` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(30) NOT NULL,
+    `price` BIGINT NOT NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `broken_at` DATETIME(3) NULL,
 
--- DropForeignKey
-ALTER TABLE `order_match` DROP FOREIGN KEY `order_match_order_id_fkey`;
-
--- DropForeignKey
-ALTER TABLE `order_match` DROP FOREIGN KEY `order_match_stock_id_fkey`;
-
--- DropForeignKey
-ALTER TABLE `stock_history` DROP FOREIGN KEY `stock_history_stock_id_fkey`;
-
--- DropTable
-DROP TABLE `order`;
-
--- DropTable
-DROP TABLE `order_match`;
-
--- DropTable
-DROP TABLE `stock_history`;
+    UNIQUE INDEX `stocks_name_key`(`name`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
 CREATE TABLE `stock_histories` (
@@ -43,6 +45,18 @@ CREATE TABLE `stock_histories` (
     `open` BIGINT NOT NULL,
 
     PRIMARY KEY (`stock_id`, `date`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `user_stocks` (
+    `account_id` INTEGER NOT NULL,
+    `stock_id` INTEGER NOT NULL,
+    `number` BIGINT NOT NULL,
+    `can_number` BIGINT NOT NULL,
+    `average` BIGINT NOT NULL,
+    `total_buy_amount` BIGINT NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (`account_id`, `stock_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
@@ -74,7 +88,16 @@ CREATE TABLE `order_matches` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
+ALTER TABLE `accounts` ADD CONSTRAINT `accounts_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `stock_histories` ADD CONSTRAINT `stock_histories_stock_id_fkey` FOREIGN KEY (`stock_id`) REFERENCES `stocks`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `user_stocks` ADD CONSTRAINT `user_stocks_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `user_stocks` ADD CONSTRAINT `user_stocks_stock_id_fkey` FOREIGN KEY (`stock_id`) REFERENCES `stocks`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `orders` ADD CONSTRAINT `orders_account_id_fkey` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
