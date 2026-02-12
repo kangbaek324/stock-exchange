@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Logger, UseGuards } from '@nestjs/common';
 import {
     ConnectedSocket,
@@ -19,7 +20,7 @@ import { ChartWsService } from './service/chart-ws.service';
 
 // @TODO 방 나가기 기능 추가 해야됨
 @UseGuards(WsGuard)
-@WebSocketGateway(parseInt(process.env.WS_PORT), {
+@WebSocketGateway(parseInt(process.env.WEBSOCKET_PORT), {
     namespace: '/stock',
     cors: { origin: '*' },
 })
