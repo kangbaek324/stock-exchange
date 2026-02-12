@@ -15,7 +15,9 @@ import { CustomSocket } from './interface/custom-socket.interface';
 import { StockWsService } from './service/stock-ws.service';
 import { OrderWsService } from './service/order-ws.service';
 import { AccountWsService } from './service/account-ws.service';
+import { ChartWsService } from './service/chart-ws.service';
 
+// @TODO 방 나가기 기능 추가 해야됨
 @UseGuards(WsGuard)
 @WebSocketGateway(3003, {
     namespace: '/stock',
@@ -28,6 +30,7 @@ export class WebsocketGateway
         private readonly stockWsService: StockWsService,
         private readonly orderWsService: OrderWsService,
         private readonly accountWsService: AccountWsService,
+        private readonly chartWsService: ChartWsService,
     ) {}
 
     @WebSocketServer() server: Server;
@@ -37,6 +40,7 @@ export class WebsocketGateway
         this.stockWsService.setServer(server);
         this.orderWsService.setServer(server);
         this.accountWsService.setServer(server);
+        this.chartWsService.setServer(server);
 
         this.logger.log('Websocket server reset');
     }
@@ -71,5 +75,14 @@ export class WebsocketGateway
         @MessageBody() accountId?: number,
     ) {
         this.accountWsService.onJoinAccountRoom(client, accountId);
+    }
+
+    @SubscribeMessage('joinChartRoom')
+    handleJoinChartRoom(
+        @ConnectedSocket() client: CustomSocket,
+        @MessageBody('stockId') stockId: number,
+        @MessageBody('type') type: ChartType,
+    ) {
+        this.chartWsService.onJoinChartWsRoom(stockId, type, client);
     }
 }
