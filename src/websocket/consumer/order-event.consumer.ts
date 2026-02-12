@@ -21,23 +21,24 @@ export class OrderEventConsumer {
         const originalMsg = context.getMessage();
 
         try {
-            // 주식 업데이트
-            this.stockWsService.updateStock(mqData.stockId);
-            await this.stockWsService.updateStockPrice(mqData.stockId);
+            await Promise.all([
+                this.stockWsService.updateStock(mqData.stockId),
+                this.stockWsService.updateStockPrice(mqData.stockId),
+                mqData.updatedOrders.length >= 2
+                    ? this.chartWsService.updateChart(mqData.stockId)
+                    : Promise.resolve(),
+                ...mqData.updatedOrders.map((order) =>
+                    Promise.all([
+                        this.orderWsService.updateOrder(order.accountId, order.id),
+                        this.accountWsService.updateAccount(order.accountId),
+                    ]),
+                ),
+            ]);
 
-            // 차트 업데이트
-            if (mqData.updatedOrders.length >= 2) {
-                await this.chartWsService.updateChart(mqData.stockId);
-            }
-
-            // 주문 업데이트
-            for (let i = 0; i < mqData.updatedOrders.length; i++) {
-                const order = mqData.updatedOrders[i];
-                await this.orderWsService.updateOrder(order.accountId, order.id);
-                await this.accountWsService.updateAccount(order.accountId);
-            }
+            channel.ack(originalMsg);
         } catch (err) {
             console.error(err);
+            channel.nack(originalMsg);
         }
     }
 }

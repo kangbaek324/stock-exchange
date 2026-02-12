@@ -33,6 +33,8 @@ async function bootstrap() {
             queueOptions: {
                 durable: true,
             },
+            prefetchCount: 1,
+            noAck: false,
         },
     });
 
@@ -59,6 +61,6 @@ async function bootstrap() {
     app.useGlobalInterceptors(new SuccessResponseInterceptor());
     app.useGlobalFilters(new GlobalExceptionFilter());
 
-    await app.listen(parseInt(process.env.SERVER_PORT));
+    await app.listen(parseInt(process.env.SERVER_PORT), '0.0.0.0');
 }
 bootstrap();
