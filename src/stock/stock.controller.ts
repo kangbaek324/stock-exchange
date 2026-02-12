@@ -12,6 +12,6 @@ export class StockController {
 
     @Get('/:id')
     getStockInfo(@Param('id') stockId: number) {
-        return this.stockService.getSstockInfo(stockId);
+        return this.stockService.getStockInfo(stockId);
     }
 }

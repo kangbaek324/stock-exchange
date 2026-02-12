@@ -47,7 +47,7 @@ export class StockService {
         return result.sort((a, b) => Number(b.per) - Number(a.per));
     }
 
-    async getSstockInfo(stockId: number) {
+    async getStockInfo(stockId: number) {
         let stock = await this.prismaService.stock.findUnique({
             where: {
                 id: stockId,

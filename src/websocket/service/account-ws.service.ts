@@ -39,8 +39,8 @@ export class AccountWsService {
 
         client.join('accountId_' + account.id);
 
-        await this.updateAccount(accountId);
-        await this.orderWsService.updateOrderInit(accountId);
+        await this.updateAccount(account.id);
+        await this.orderWsService.updateOrderInit(account.id);
     }
 
     // 내 계좌 업데이트 내역 전송

@@ -23,22 +23,25 @@ export class AccountService {
     }
 
     async createAccount(user: User): Promise<unknown> {
-        const before_account_number = await this.prismaService.account.findFirst({
-            orderBy: { createdAt: 'desc' },
-            select: { accountNumber: true },
-        });
+        const account = await this.prismaService.$transaction(async (prisma) => {
+            const last = await prisma.account.findFirst({
+                orderBy: { accountNumber: 'desc' },
+                select: { accountNumber: true },
+            });
 
-        const response = await this.prismaService.account.create({
-            data: {
-                userId: user.id,
-                accountNumber: ++before_account_number.accountNumber,
-                money: 100000000,
-            },
+            return prisma.account.create({
+                data: {
+                    userId: user.id,
+                    accountNumber: (last?.accountNumber ?? 10000) + 1,
+                    money: 10000000,
+                },
+            });
         });
 
         return {
-            accountNumber: response.accountNumber,
-            money: response.money.toString(),
+            id: account.id,
+            accountNumber: account.accountNumber,
+            money: account.money.toString(),
         };
     }
 }

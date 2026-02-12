@@ -19,7 +19,7 @@ import { ChartWsService } from './service/chart-ws.service';
 
 // @TODO 방 나가기 기능 추가 해야됨
 @UseGuards(WsGuard)
-@WebSocketGateway(3003, {
+@WebSocketGateway(parseInt(process.env.WS_PORT), {
     namespace: '/stock',
     cors: { origin: '*' },
 })
