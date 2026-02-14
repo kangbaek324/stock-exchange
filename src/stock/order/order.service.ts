@@ -17,7 +17,7 @@ export class OrderService {
         private readonly orderValidation: OrderValidationService,
     ) {}
 
-    sendMQ(
+    async sendMQ(
         data: BuyOrder | SellOrder | CancelOrder | EditOrder,
         user: User,
         type: 'buy' | 'sell' | 'cancel' | 'edit',
@@ -28,6 +28,7 @@ export class OrderService {
             user,
             timestamp: Number(process.hrtime.bigint()),
         };
+        await this.client.connect();
 
         this.client.emit('order.created', mqData);
 

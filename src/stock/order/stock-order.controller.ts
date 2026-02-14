@@ -29,7 +29,7 @@ export class StockOrderController {
         };
         await this.orderValidationService.buySellValidate(data, user, 'buy');
 
-        return this.orderService.sendMQ(data, user, 'buy');
+        return await this.orderService.sendMQ(data, user, 'buy');
     }
 
     @Post('/sell')
@@ -79,7 +79,7 @@ export class StockOrderController {
 
         // MQ 전송
         try {
-            return this.orderService.sendMQ(data, user, 'sell');
+            return await this.orderService.sendMQ(data, user, 'sell');
         } catch (err) {
             await this.prismaService.$transaction(async (prisma: PrismaClient) => {
                 await prisma.$queryRaw`

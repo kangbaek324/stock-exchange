@@ -1,4 +1,13 @@
-import { Controller, Get, UseGuards, Query, Put, Delete, Body, Param } from '@nestjs/common';
+import {
+    Controller,
+    Get,
+    UseGuards,
+    Query,
+    Put,
+    Delete,
+    Body,
+    Param,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { GetOrderDto } from './dto/get-order.dto';
@@ -33,7 +42,7 @@ export class OrderController {
         };
         await this.orderValidationService.editValidate(data, user);
 
-        return this.orderService.sendMQ(data, user, 'edit');
+        return await this.orderService.sendMQ(data, user, 'edit');
     }
 
     @Delete('/:id')
@@ -48,6 +57,6 @@ export class OrderController {
         };
         await this.orderValidationService.cancelValidate(data, user);
 
-        return this.orderService.sendMQ(data, user, 'cancel');
+        return await this.orderService.sendMQ(data, user, 'cancel');
     }
 }
