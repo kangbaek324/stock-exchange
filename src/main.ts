@@ -6,6 +6,7 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import * as cookieParser from 'cookie-parser';
 import { SuccessResponseInterceptor } from './common/interceptors/success-response.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
@@ -25,10 +26,12 @@ async function bootstrap() {
         }),
     );
 
+    const configService = app.get(ConfigService);
+
     app.connectMicroservice<MicroserviceOptions>({
         transport: Transport.RMQ,
         options: {
-            urls: ['amqp://localhost:5672'],
+            urls: [configService.get<string>('RABBITMQ_URL')],
             queue: 'order_event_queue',
             queueOptions: {
                 durable: true,
