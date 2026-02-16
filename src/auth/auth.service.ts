@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { SigninDto } from './dto/signin.dto';
@@ -7,15 +7,18 @@ import { JwtService } from '@nestjs/jwt';
 import { UserPayload } from './interface/user-payload.interface';
 import { AuthException } from './error/auth.exception';
 
-const salt = 10;
+const SALT = 10;
+const ACCESS_TOKEN_EXPIRED = '15m';
+const REFRESH_TOKEN_EXPIRED = '7d';
 
 @Injectable()
 export class AuthService {
     constructor(
         private readonly prismaService: PrismaService,
-        private readonly jwtService: JwtService
+        private readonly jwtService: JwtService,
     ) {}
 
+    // 회원가입
     async signup(dto: SignupDto): Promise<void> {
         if (await this.checkUsernameDuplicate(dto.username)) {
             throw new AuthException('ALREADY_EXIST_NAME');
@@ -24,50 +27,97 @@ export class AuthService {
             throw new AuthException('ALREADY_EXIST_EMAIL');
         }
 
-        const password = await bcrypt.hash(dto.password, salt)
-        await this.prismaService.user.create({ 
-            data : {
-                username : dto.username,
-                password : password,
-                email : dto.email
-            }
+        const password = await bcrypt.hash(dto.password, SALT);
+        await this.prismaService.user.create({
+            data: {
+                username: dto.username,
+                password: password,
+                email: dto.email,
+            },
         });
     }
 
-    // @TODO RefreshToken 추가 해야됨
+    // 로그인
     async signin(dto: SigninDto): Promise<unknown> {
-        let findUser = await this.prismaService.user.findUnique({
-            where : { username : dto.username },
-        })
+        const user = await this.prismaService.user.findUnique({
+            where: { username: dto.username },
+        });
 
-        if (findUser) {
-            // @TODO 비밀번호 검사 안하는 중 (테스트 용)
-            // const match = await bcrypt.compare(signinData.password, findUser.password)
-            const match = true;
+        if (user) {
+            const match = await bcrypt.compare(dto.password, user.password);
             if (match) {
-                const payload: UserPayload = { userId: findUser.id, username: dto.username };
-                const jwt = { accessToken : this.jwtService.sign(payload) };
+                const payload: UserPayload = {
+                    userId: user.id,
+                };
+
+                const jwt = {
+                    accessToken: this.jwtService.sign(payload, {
+                        expiresIn: ACCESS_TOKEN_EXPIRED,
+                    }),
+                    refreshToken: this.jwtService.sign(payload, {
+                        expiresIn: REFRESH_TOKEN_EXPIRED,
+                    }),
+                };
+
+                await this.prismaService.refreshToken.create({
+                    data: {
+                        hashedToken: await bcrypt.hash(jwt.refreshToken, SALT),
+                        userId: user.id,
+                    },
+                });
 
                 return jwt;
             }
         }
-        
-        throw new UnauthorizedException("아이디 또는 비밀번호가 잘못되었습니다.");
+
+        throw new AuthException('INCORRECT_ID_OR_PASSWORD');
+    }
+
+    // AccessToken 재발급
+    async refreshAccessToken(refreshToken: string) {
+        const jwt = this.jwtService.verify(refreshToken, { ignoreExpiration: true });
+
+        const refreshTokenDBList = await this.prismaService.refreshToken.findMany({
+            where: { userId: jwt.userId },
+        });
+
+        let matchedToken = null;
+        for (const refreshTokenDB of refreshTokenDBList) {
+            if (await bcrypt.compare(refreshToken, refreshTokenDB.hashedToken)) {
+                matchedToken = refreshTokenDB;
+                break;
+            }
+        }
+
+        if (!matchedToken) throw new AuthException('REFRESH_TOKEN_NOT_FOUND');
+
+        if (jwt.exp < Math.floor(Date.now() / 1000)) {
+            await this.prismaService.refreshToken.delete({
+                where: { id: matchedToken.id },
+            });
+
+            throw new AuthException('REFRESH_TOKEN_EXPRIED');
+        }
+
+        const payload: UserPayload = { userId: jwt.userId };
+        return this.jwtService.sign(payload, {
+            expiresIn: ACCESS_TOKEN_EXPIRED,
+        });
     }
 
     // 유저 이름 중복 체크
     private async checkUsernameDuplicate(username: string): Promise<Boolean> {
         const result = await this.prismaService.user.findUnique({
-            where : { username : username }
+            where: { username: username },
         });
-        
+
         return result ? true : false;
     }
 
     // 이메일 중복 체크
     private async checkEmailDuplicate(email: string): Promise<Boolean> {
         const result = await this.prismaService.user.findUnique({
-            where : { email : email }
+            where: { email: email },
         });
 
         return result ? true : false;
