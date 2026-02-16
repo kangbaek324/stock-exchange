@@ -75,6 +75,33 @@ export class AuthService {
 
     // AccessToken 재발급
     async refreshAccessToken(refreshToken: string) {
+        const { jwt, matchedToken } = await this.validateRefreshToken(refreshToken);
+
+        if (jwt.exp < Math.floor(Date.now() / 1000)) {
+            await this.prismaService.refreshToken.delete({
+                where: { id: matchedToken.id },
+            });
+
+            throw new AuthException('REFRESH_TOKEN_EXPIRED');
+        }
+
+        const payload: UserPayload = { userId: jwt.userId };
+        return this.jwtService.sign(payload, {
+            expiresIn: ACCESS_TOKEN_EXPIRED,
+        });
+    }
+
+    // 로그아웃
+    async logout(refreshToken: string) {
+        const { matchedToken } = await this.validateRefreshToken(refreshToken);
+
+        await this.prismaService.refreshToken.delete({
+            where: { id: matchedToken.id },
+        });
+    }
+
+    // RefreshToken 검증
+    private async validateRefreshToken(refreshToken: string) {
         const jwt = this.jwtService.verify(refreshToken, { ignoreExpiration: true });
 
         const refreshTokenDBList = await this.prismaService.refreshToken.findMany({
@@ -91,18 +118,7 @@ export class AuthService {
 
         if (!matchedToken) throw new AuthException('REFRESH_TOKEN_NOT_FOUND');
 
-        if (jwt.exp < Math.floor(Date.now() / 1000)) {
-            await this.prismaService.refreshToken.delete({
-                where: { id: matchedToken.id },
-            });
-
-            throw new AuthException('REFRESH_TOKEN_EXPRIED');
-        }
-
-        const payload: UserPayload = { userId: jwt.userId };
-        return this.jwtService.sign(payload, {
-            expiresIn: ACCESS_TOKEN_EXPIRED,
-        });
+        return { jwt, matchedToken };
     }
 
     // 유저 이름 중복 체크

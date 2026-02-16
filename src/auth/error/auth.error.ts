@@ -21,7 +21,7 @@ export const AuthError = {
         status: HttpStatus.UNAUTHORIZED,
         message: 'RefreshToken을 찾을 수 없습니다.',
     },
-    REFRESH_TOKEN_EXPRIED: {
+    REFRESH_TOKEN_EXPIRED: {
         code: 'AUTH_005',
         status: HttpStatus.UNAUTHORIZED,
         message: 'RefreshToken이 만료되었습니다.',

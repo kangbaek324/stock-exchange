@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Post, Req, UseInterceptors } from '@nestjs/common';
 import { SignupDto } from './dto/signup.dto';
 import { SigninDto } from './dto/signin.dto';
 import { AuthService } from './auth.service';
@@ -24,5 +24,11 @@ export class AuthController {
     async refreshAccessToken(@Req() req: Request) {
         const refreshToken = req.cookies['refreshToken'];
         return this.authService.refreshAccessToken(refreshToken);
+    }
+
+    @Post('/logout')
+    async logout(@Req() req: Request) {
+        const refreshToken = req.cookies['refreshToken'];
+        return this.authService.logout(refreshToken);
     }
 }
