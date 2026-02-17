@@ -20,7 +20,7 @@ export class jwtInterceptor implements NestInterceptor {
                 res.cookie('refreshToken', jwt.refreshToken, {
                     httpOnly: true,
                     secure: true,
-                    maxAge: 1000 * 60 * 60 * 24 * 7, // 30일
+                    maxAge: 1000 * 60 * 60 * 24 * 7, // 7일
                 });
 
                 return { accessToken: jwt.accessToken };

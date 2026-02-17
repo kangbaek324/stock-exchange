@@ -1,5 +1,4 @@
 import { Controller, Post, UseGuards, Body, Param } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { BuyDto } from './dto/buy.dto';
 import { SellDto } from './dto/sell.dto';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
@@ -7,9 +6,10 @@ import { PrismaClient, User, UserStock } from '@prisma/client';
 import { OrderValidationService } from './order-validation.service';
 import { OrderService } from './order.service';
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
 
 @Controller('stocks/:id/orders')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(JwtAuthGuard)
 export class StockOrderController {
     constructor(
         private readonly prismaService: PrismaService,

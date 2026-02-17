@@ -26,6 +26,21 @@ export const AuthError = {
         status: HttpStatus.UNAUTHORIZED,
         message: 'RefreshToken이 만료되었습니다.',
     },
+    REFRESH_TOKEN_IS_NULL: {
+        code: 'AUTH_006',
+        status: HttpStatus.BAD_REQUEST,
+        message: 'RefreshToken이 누락되었습니다.',
+    },
+    ACCESS_TOKEN_EXPIRED: {
+        code: 'AUTH_007',
+        status: HttpStatus.UNAUTHORIZED,
+        message: 'AccessToken이 만료되었습니다.',
+    },
+    ACCESS_TOKEN_INVALID: {
+        code: 'AUTH_008',
+        status: HttpStatus.UNAUTHORIZED,
+        message: 'AccessToken이 유효하지 않습니다.',
+    },
 } as const;
 
 export type AuthErrorKey = keyof typeof AuthError;

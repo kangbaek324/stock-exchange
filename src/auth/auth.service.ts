@@ -6,17 +6,21 @@ import { SignupDto } from './dto/signup.dto';
 import { JwtService } from '@nestjs/jwt';
 import { UserPayload } from './interface/user-payload.interface';
 import { AuthException } from './error/auth.exception';
-
-const SALT = 10;
-const ACCESS_TOKEN_EXPIRED = '15m';
-const REFRESH_TOKEN_EXPIRED = '7d';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly jwtService: JwtService,
+        private readonly configService: ConfigService,
     ) {}
+
+    private SALT = 10;
+    private ACCESS_TOKEN_EXPIRED = '15m';
+    private REFRESH_TOKEN_EXPIRED = '7d';
+    private ACCESS_TOKEN_SECRET = this.configService.get<string>('ACCESS_TOKEN_SECRET');
+    private REFRESH_TOKEN_SECRET = this.configService.get<string>('REFRESH_TOKEN_SECRET');
 
     // 회원가입
     async signup(dto: SignupDto): Promise<void> {
@@ -27,7 +31,7 @@ export class AuthService {
             throw new AuthException('ALREADY_EXIST_EMAIL');
         }
 
-        const password = await bcrypt.hash(dto.password, SALT);
+        const password = await bcrypt.hash(dto.password, this.SALT);
         await this.prismaService.user.create({
             data: {
                 username: dto.username,
@@ -38,7 +42,7 @@ export class AuthService {
     }
 
     // 로그인
-    async signin(dto: SigninDto): Promise<unknown> {
+    async signin(dto: SigninDto) {
         const user = await this.prismaService.user.findUnique({
             where: { username: dto.username },
         });
@@ -52,16 +56,18 @@ export class AuthService {
 
                 const jwt = {
                     accessToken: this.jwtService.sign(payload, {
-                        expiresIn: ACCESS_TOKEN_EXPIRED,
+                        expiresIn: this.ACCESS_TOKEN_EXPIRED,
+                        secret: this.ACCESS_TOKEN_SECRET,
                     }),
                     refreshToken: this.jwtService.sign(payload, {
-                        expiresIn: REFRESH_TOKEN_EXPIRED,
+                        expiresIn: this.REFRESH_TOKEN_EXPIRED,
+                        secret: this.REFRESH_TOKEN_SECRET,
                     }),
                 };
 
                 await this.prismaService.refreshToken.create({
                     data: {
-                        hashedToken: await bcrypt.hash(jwt.refreshToken, SALT),
+                        hashedToken: await bcrypt.hash(jwt.refreshToken, this.SALT),
                         userId: user.id,
                     },
                 });
@@ -87,7 +93,8 @@ export class AuthService {
 
         const payload: UserPayload = { userId: jwt.userId };
         return this.jwtService.sign(payload, {
-            expiresIn: ACCESS_TOKEN_EXPIRED,
+            expiresIn: this.ACCESS_TOKEN_EXPIRED,
+            secret: this.ACCESS_TOKEN_SECRET,
         });
     }
 
@@ -102,7 +109,10 @@ export class AuthService {
 
     // RefreshToken 검증
     private async validateRefreshToken(refreshToken: string) {
-        const jwt = this.jwtService.verify(refreshToken, { ignoreExpiration: true });
+        const jwt = this.jwtService.verify(refreshToken, {
+            ignoreExpiration: true,
+            secret: this.REFRESH_TOKEN_SECRET,
+        });
 
         const refreshTokenDBList = await this.prismaService.refreshToken.findMany({
             where: { userId: jwt.userId },

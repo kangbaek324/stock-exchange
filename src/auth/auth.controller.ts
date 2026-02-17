@@ -4,6 +4,7 @@ import { SigninDto } from './dto/signin.dto';
 import { AuthService } from './auth.service';
 import { jwtInterceptor } from './interceptor/jwt.interceptor';
 import { Request } from 'express';
+import { AuthException } from './error/auth.exception';
 
 @Controller('auth')
 export class AuthController {
@@ -22,13 +23,22 @@ export class AuthController {
 
     @Post('/access-token')
     async refreshAccessToken(@Req() req: Request) {
-        const refreshToken = req.cookies['refreshToken'];
+        const refreshToken = this.getRefreshTokenFromCookie(req);
         return this.authService.refreshAccessToken(refreshToken);
     }
 
     @Post('/logout')
     async logout(@Req() req: Request) {
-        const refreshToken = req.cookies['refreshToken'];
+        const refreshToken = this.getRefreshTokenFromCookie(req);
         return this.authService.logout(refreshToken);
+    }
+
+    private getRefreshTokenFromCookie(req: Request) {
+        const refreshToken = req.cookies['refreshToken'];
+        if (!refreshToken) {
+            throw new AuthException('REFRESH_TOKEN_IS_NULL');
+        }
+
+        return refreshToken;
     }
 }
