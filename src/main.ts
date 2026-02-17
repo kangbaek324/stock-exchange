@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { HttpException, HttpStatus, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -23,6 +23,20 @@ async function bootstrap() {
             whitelist: true,
             forbidNonWhitelisted: true,
             transform: true,
+            exceptionFactory: (errors) => {
+                const message = errors
+                    .map((error) => Object.values(error.constraints))
+                    .flat()
+                    .join(', ');
+
+                throw new HttpException(
+                    {
+                        errorCode: 'VALIDATION_ERROR',
+                        message,
+                    },
+                    HttpStatus.BAD_REQUEST,
+                );
+            },
         }),
     );
 
