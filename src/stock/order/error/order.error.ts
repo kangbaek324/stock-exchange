@@ -41,6 +41,11 @@ export const OrderError = {
         status: HttpStatus.FORBIDDEN,
         message: '주문에 접근할 권한이 없습니다.',
     },
+    PRICE_OUT_OF_LIMIT: {
+        code: 'ORDER_009',
+        status: HttpStatus.BAD_REQUEST,
+        message: '주문 제한 가격을 넘은 주문입니다.',
+    },
 } as const;
 
 export type OrderErrorKey = keyof typeof OrderError;

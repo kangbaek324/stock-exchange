@@ -9,6 +9,8 @@ import { CancelOrder } from './type/cancel.type';
 import { StockException } from '../error/stock.exception';
 import { OrderException } from './error/order.exception';
 import { AccountException } from 'src/account/error/account.exception';
+import { getKstDate } from 'src/common/helpers/get-kst-date';
+import { STOCK_LIMIT } from 'src/common/consants/stock.constants';
 
 @Injectable()
 export class OrderValidationService {
@@ -33,6 +35,45 @@ export class OrderValidationService {
         if (check) throw new OrderException('INVALID_ORDER_TICK_SIZE');
     }
 
+    private getTickSize(price: number): number {
+        if (price < 2000) return 1;
+        if (price < 5000) return 5;
+        if (price < 20000) return 10;
+        if (price < 50000) return 50;
+        if (price < 200000) return 100;
+        if (price < 500000) return 500;
+        return 1000;
+    }
+
+    private async limitSizeCheck(stockId: number, price) {
+        const prevClose = (
+            await this.prisma.stockHistory.findUnique({
+                where: {
+                    stockId_date: {
+                        stockId: stockId,
+                        date: getKstDate(-1),
+                    },
+                },
+                select: {
+                    close: true,
+                },
+            })
+        ).close;
+
+        const upperRaw = Math.floor(Number(prevClose) * (1 + STOCK_LIMIT.UPPER_RATE));
+        const lowerRaw = Math.ceil(Number(prevClose) * (1 - STOCK_LIMIT.LOWER_RATE));
+
+        const upperTick = this.getTickSize(upperRaw);
+        const lowerTick = this.getTickSize(lowerRaw);
+
+        const upperLimit = Math.floor(upperRaw / upperTick) * upperTick;
+        const lowerLimit = Math.ceil(lowerRaw / lowerTick) * lowerTick;
+
+        if (price > upperLimit || price < lowerLimit) {
+            throw new OrderException('PRICE_OUT_OF_LIMIT');
+        }
+    }
+
     async getAccount(accountNumber: number) {
         const account = await this.prisma.account.findUnique({
             where: { accountNumber: accountNumber },
@@ -55,7 +96,7 @@ export class OrderValidationService {
         }
     }
 
-    async buySellValidate(
+    async tradeValidate(
         data: BuyOrder | SellOrder,
         user: User,
         tradingType: TradingType,
@@ -79,6 +120,8 @@ export class OrderValidationService {
         } else if (data.number <= 0) {
             throw new OrderException('INVALID_ORDER_NUMBER');
         }
+
+        await this.limitSizeCheck(data.stockId, data.price);
 
         if (tradingType == 'buy') {
             if (account.money < BigInt(data.price * data.number)) {

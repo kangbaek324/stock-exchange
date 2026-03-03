@@ -27,7 +27,7 @@ export class StockOrderController {
             ...dto,
             stockId: id,
         };
-        await this.orderValidationService.buySellValidate(data, user, 'buy');
+        await this.orderValidationService.tradeValidate(data, user, 'buy');
 
         return await this.orderService.sendMQ(data, user, 'buy');
     }
@@ -42,7 +42,7 @@ export class StockOrderController {
             ...dto,
             stockId: id,
         };
-        await this.orderValidationService.buySellValidate(data, user, 'sell');
+        await this.orderValidationService.tradeValidate(data, user, 'sell');
 
         const account = await this.prismaService.account.findUnique({
             where: { accountNumber: data.accountNumber },
