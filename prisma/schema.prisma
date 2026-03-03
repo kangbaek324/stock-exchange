@@ -30,9 +30,20 @@ model User {
   email     String   @unique @db.VarChar(50)
   createdAt DateTime @default(now()) @map("created_at")
 
-  account Account[]
+  account       Account[]
+  refreshTokens refreshToken[]
 
   @@map("users")
+}
+
+model refreshToken {
+  id          Int    @id @default(autoincrement())
+  userId      Int    @map("user_id")
+  hashedToken String @map("hashed_token")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
 }
 
 model Account {
