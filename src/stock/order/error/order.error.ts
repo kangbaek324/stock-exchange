@@ -46,6 +46,11 @@ export const OrderError = {
         status: HttpStatus.BAD_REQUEST,
         message: '주문 제한 가격을 넘은 주문입니다.',
     },
+    STOCK_HISTORIES_NOT_FOUND: {
+        code: 'ORDER_010',
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: '서버에 오류가 발생했습니다.',
+    },
 } as const;
 
 export type OrderErrorKey = keyof typeof OrderError;

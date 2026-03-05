@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { STOCK_LIMIT } from 'src/common/consants/stock.constants';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { OrderException } from '../error/order.exception';
+import { getKstDate } from 'src/common/helpers/get-kst-date';
 
 @Injectable()
 export class StockLimitService {
@@ -38,19 +39,30 @@ export class StockLimitService {
 
     async limitSizeCheck(stockId: number, price) {
         // @TODO Redis 적용필요
-        const prevHistory = await this.prismaService.stockHistory.findFirst({
+        const prevHistory = await this.prismaService.stockHistory.findUnique({
             where: {
-                stockId: stockId,
-            },
-            orderBy: {
-                date: 'desc',
+                stockId_date: {
+                    stockId: stockId,
+                    date: getKstDate(-1),
+                },
             },
             select: {
                 close: true,
             },
         });
 
-        const prevClose = prevHistory.close;
+        // 상장 당일일 경우에 시가를 기준으로 상 하한가 측정
+        const prevClose =
+            prevHistory?.close ??
+            (
+                await this.prismaService.stockHistory.findUnique({
+                    where: { stockId_date: { stockId, date: getKstDate(0) } },
+                    select: { open: true },
+                })
+            )?.open;
+
+        if (!prevClose) throw new OrderException('STOCK_HISTORIES_NOT_FOUND');
+
         const upperRaw = Math.floor(Number(prevClose) * (1 + STOCK_LIMIT.UPPER_RATE));
         const lowerRaw = Math.ceil(Number(prevClose) * (1 - STOCK_LIMIT.LOWER_RATE));
 
