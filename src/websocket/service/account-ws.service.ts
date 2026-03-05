@@ -35,7 +35,7 @@ export class AccountWsService {
         }
 
         if (!account) throw new WebsocketException('ACCOUNT_NOT_FOUND');
-        if (account.userId !== userId) throw new WebsocketException('ACCOUNT_FORBIDDEN');
+        // if (account.userId !== userId) throw new WebsocketException('ACCOUNT_FORBIDDEN');
 
         client.join('accountId_' + account.id);
 
@@ -53,6 +53,7 @@ export class AccountWsService {
                 id: true,
                 accountNumber: true,
                 money: true,
+                canMoney: true,
             },
         });
 
@@ -77,6 +78,7 @@ export class AccountWsService {
             account: {
                 ...account,
                 money: account.money.toString(),
+                canMoney: account.canMoney.toString(),
             },
             userStock: userStock.map((stock) => ({
                 ...stock,

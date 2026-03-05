@@ -33,7 +33,8 @@ export class AccountService {
                 data: {
                     userId: user.id,
                     accountNumber: (last?.accountNumber ?? 10000) + 1,
-                    money: 10000000,
+                    money: 10000000n,
+                    canMoney: 10000000n,
                 },
             });
         });

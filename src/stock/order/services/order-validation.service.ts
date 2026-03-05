@@ -1,78 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { BuyOrder } from './type/buy.type';
-import { SellOrder } from './type/sell.type';
 import { OrderStatus, OrderType, TradingType, User } from '@prisma/client';
-import { GetOrderDto } from './dto/get-order.dto';
-import { EditOrder } from './type/edit.type';
-import { CancelOrder } from './type/cancel.type';
-import { StockException } from '../error/stock.exception';
-import { OrderException } from './error/order.exception';
 import { AccountException } from 'src/account/error/account.exception';
-import { getKstDate } from 'src/common/helpers/get-kst-date';
-import { STOCK_LIMIT } from 'src/common/consants/stock.constants';
+import { OrderException } from '../error/order.exception';
+import { CancelOrder } from '../type/cancel.type';
+import { EditOrder } from '../type/edit.type';
+import { StockException } from 'src/stock/error/stock.exception';
+import { BuyOrder } from '../type/buy.type';
+import { SellOrder } from '../type/sell.type';
+import { GetOrderDto } from '../dto/get-order.dto';
+import { StockLimitService } from './stock-limit.service';
 
 @Injectable()
 export class OrderValidationService {
-    constructor(private readonly prisma: PrismaService) {}
-
-    private tickSizeCheck(price) {
-        let check = false;
-        if (price >= 2000 && price < 5000) {
-            if (price % 5 !== 0) check = true;
-        } else if (price >= 5000 && price < 20000) {
-            if (price % 10 !== 0) check = true;
-        } else if (price >= 20000 && price < 500000) {
-            if (price % 50 !== 0) check = true;
-        } else if (price >= 50000 && price < 200000) {
-            if (price % 100 !== 0) check = true;
-        } else if (price >= 200000 && price < 500000) {
-            if (price % 500 !== 0) check = true;
-        } else if (price >= 500000) {
-            if (price % 1000 !== 0) check = true;
-        }
-
-        if (check) throw new OrderException('INVALID_ORDER_TICK_SIZE');
-    }
-
-    private getTickSize(price: number): number {
-        if (price < 2000) return 1;
-        if (price < 5000) return 5;
-        if (price < 20000) return 10;
-        if (price < 50000) return 50;
-        if (price < 200000) return 100;
-        if (price < 500000) return 500;
-        return 1000;
-    }
-
-    private async limitSizeCheck(stockId: number, price) {
-        const prevClose = (
-            await this.prisma.stockHistory.findUnique({
-                where: {
-                    stockId_date: {
-                        stockId: stockId,
-                        date: getKstDate(-1),
-                    },
-                },
-                select: {
-                    close: true,
-                },
-            })
-        ).close;
-
-        const upperRaw = Math.floor(Number(prevClose) * (1 + STOCK_LIMIT.UPPER_RATE));
-        const lowerRaw = Math.ceil(Number(prevClose) * (1 - STOCK_LIMIT.LOWER_RATE));
-
-        const upperTick = this.getTickSize(upperRaw);
-        const lowerTick = this.getTickSize(lowerRaw);
-
-        const upperLimit = Math.floor(upperRaw / upperTick) * upperTick;
-        const lowerLimit = Math.ceil(lowerRaw / lowerTick) * lowerTick;
-
-        if (price > upperLimit || price < lowerLimit) {
-            throw new OrderException('PRICE_OUT_OF_LIMIT');
-        }
-    }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly stockLimitService: StockLimitService,
+    ) {}
 
     async getAccount(accountNumber: number) {
         const account = await this.prisma.account.findUnique({
@@ -96,12 +40,8 @@ export class OrderValidationService {
         }
     }
 
-    async tradeValidate(
-        data: BuyOrder | SellOrder,
-        user: User,
-        tradingType: TradingType,
-    ) {
-        this.tickSizeCheck(data.price);
+    async tradeValidate(data: BuyOrder | SellOrder, user: User) {
+        this.stockLimitService.tickSizeCheck(data.price);
 
         const account = await this.getAccount(data.accountNumber);
         if (account.userId !== user.id) {
@@ -121,26 +61,13 @@ export class OrderValidationService {
             throw new OrderException('INVALID_ORDER_NUMBER');
         }
 
-        await this.limitSizeCheck(data.stockId, data.price);
-
-        if (tradingType == 'buy') {
-            if (account.money < BigInt(data.price * data.number)) {
-                // @TODO 테스트를 위한 주석
-                // throw new OrderException('NOT_ENOUGH_MONEY');
-            }
-        } else {
-            const userStocks = await this.prisma.userStock.findFirst({
-                where: { accountId: account.id, stockId: data.stockId },
-            });
-
-            if (!userStocks || userStocks.canNumber < data.number) {
-                throw new OrderException('NOT_ENOUGH_STOCK');
-            }
+        if (data.orderType === OrderType.limit) {
+            await this.stockLimitService.limitSizeCheck(data.stockId, data.price);
         }
     }
 
     async editValidate(data: EditOrder, user: User) {
-        this.tickSizeCheck(data.price);
+        this.stockLimitService.tickSizeCheck(data.price);
 
         const account = await this.getAccount(data.accountNumber);
         if (account.userId !== user.id) {
@@ -152,6 +79,7 @@ export class OrderValidationService {
                 id: data.orderId,
             },
             select: {
+                stockId: true,
                 accountId: true,
                 status: true,
             },
@@ -166,6 +94,8 @@ export class OrderValidationService {
         } else if (data.price <= 0) {
             throw new OrderException('INVALID_ORDER_PRICE');
         }
+
+        await this.stockLimitService.limitSizeCheck(order.stockId, data.price);
     }
 
     async cancelValidate(data: CancelOrder, user: User) {

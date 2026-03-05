@@ -1,7 +1,8 @@
 export type BuyOrder = {
     accountNumber: number;
     stockId: number;
-    price: number;
-    number: number;
+    price: bigint;
+    number: bigint;
     orderType: 'limit' | 'market';
+    lockedBalance: 0n;
 };

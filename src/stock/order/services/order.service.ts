@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { GetOrderDto } from './dto/get-order.dto';
 import { ClientProxy } from '@nestjs/microservices';
 import { User } from '@prisma/client';
 import { OrderValidationService } from './order-validation.service';
-import { BuyOrder } from './type/buy.type';
-import { SellOrder } from './type/sell.type';
-import { CancelOrder } from './type/cancel.type';
-import { EditOrder } from './type/edit.type';
+import { BuyOrder } from '../type/buy.type';
+import { SellOrder } from '../type/sell.type';
+import { CancelOrder } from '../type/cancel.type';
+import { EditOrder } from '../type/edit.type';
+import { GetOrderDto } from '../dto/get-order.dto';
 
 @Injectable()
 export class OrderService {

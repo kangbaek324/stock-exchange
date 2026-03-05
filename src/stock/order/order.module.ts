@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { OrderController } from './order.controller';
-import { OrderService } from './order.service';
+import { OrderController } from './controllers/order.controller';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { OrderValidationService } from './order-validation.service';
-import { StockOrderController } from './stock-order.controller';
+import { StockOrderController } from './controllers/stock-order.controller';
 import { ConfigService } from '@nestjs/config';
+import { OrderService } from './services/order.service';
+import { OrderValidationService } from './services/order-validation.service';
+import { StockLimitService } from './services/stock-limit.service';
 
 @Module({
     imports: [
@@ -27,6 +28,6 @@ import { ConfigService } from '@nestjs/config';
         ]),
     ],
     controllers: [OrderController, StockOrderController],
-    providers: [OrderService, OrderValidationService],
+    providers: [OrderService, OrderValidationService, StockLimitService],
 })
 export class OrderModule {}

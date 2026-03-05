@@ -17,7 +17,7 @@ export class AuthService {
     ) {}
 
     private SALT = 10;
-    private ACCESS_TOKEN_EXPIRED = '15m';
+    private ACCESS_TOKEN_EXPIRED = '15d';
     private REFRESH_TOKEN_EXPIRED = '7d';
     private ACCESS_TOKEN_SECRET = this.configService.get<string>('ACCESS_TOKEN_SECRET');
     private REFRESH_TOKEN_SECRET = this.configService.get<string>('REFRESH_TOKEN_SECRET');

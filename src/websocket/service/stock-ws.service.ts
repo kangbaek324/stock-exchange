@@ -53,6 +53,8 @@ export class StockWsService {
             high: stockHistoryDB?.high.toString() ?? stockInfo.price,
             close: stockHistoryDB?.close.toString() ?? stockInfo.price,
             open: stockHistoryDB?.open.toString() ?? stockInfo.price,
+            upperLimit: stockHistoryDB?.upperLimit.toString(),
+            lowerLimit: stockHistoryDB?.lowerLimit.toString(),
         };
 
         // 전일 종가 조회
