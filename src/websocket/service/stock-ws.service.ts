@@ -26,6 +26,14 @@ export class StockWsService {
         client.join('stockId_price_' + stockIdToString);
     }
 
+    onLeaveStockRoom(stockId: number, client: CustomSocket) {
+        client.leave('stockId_' + stockId.toString());
+    }
+
+    onLeaveStockPriceRoom(stockId: number, client: CustomSocket) {
+        client.leave('stockId_price_' + stockId.toString());
+    }
+
     // 주식 가격과 호가창에 대한 정보 전송
     // @TODO 현재는 전체 데이터 전송 최적화시 세부적으로 전송되도록 변경해야됨
     async updateStock(stockId: number) {
@@ -137,6 +145,6 @@ export class StockWsService {
 
         this.server
             .to('stockId_price_' + stockId.toString())
-            .emit('stockPriceUpdated', stockPrice);
+            .emit('stockPriceUpdated_' + stockId, stockPrice);
     }
 }

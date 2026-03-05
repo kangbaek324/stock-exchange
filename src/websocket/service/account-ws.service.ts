@@ -18,6 +18,10 @@ export class AccountWsService {
         this.server = server;
     }
 
+    onLeaveAccountRoom(client: CustomSocket, accountId: number) {
+        client.leave('accountId_' + accountId);
+    }
+
     async onJoinAccountRoom(client: CustomSocket, accountId: number) {
         const userId = client.user.userId;
         let account: Account;
@@ -35,7 +39,7 @@ export class AccountWsService {
         }
 
         if (!account) throw new WebsocketException('ACCOUNT_NOT_FOUND');
-        // if (account.userId !== userId) throw new WebsocketException('ACCOUNT_FORBIDDEN');
+        if (account.userId != userId) throw new WebsocketException('ACCOUNT_FORBIDDEN');
 
         client.join('accountId_' + account.id);
 

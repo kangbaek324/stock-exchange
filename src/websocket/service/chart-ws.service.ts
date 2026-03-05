@@ -17,6 +17,10 @@ export class ChartWsService {
         client.join(`chart_${stockIdToString}_${type}`);
     }
 
+    onLeaveChartWsRoom(stockId: number, type: ChartType, client: CustomSocket) {
+        client.leave(`chart_${stockId.toString()}_${type}`);
+    }
+
     async getChartM(stockId: number, type: ChartType) {
         const time = type.slice(0, -1);
 
