@@ -1,19 +1,22 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { ClientProxy } from '@nestjs/microservices';
-import { User } from '@prisma/client';
+import { OrderType, User } from '@prisma/client';
 import { OrderValidationService } from './order-validation.service';
 import { BuyOrder } from '../type/buy.type';
 import { SellOrder } from '../type/sell.type';
 import { CancelOrder } from '../type/cancel.type';
 import { EditOrder } from '../type/edit.type';
 import { GetOrderDto } from '../dto/get-order.dto';
+import { getKstDate } from 'src/common/helpers/get-kst-date';
+import { OrderException } from '../error/order.exception';
+import { BuyDto } from '../dto/buy.dto';
 
 @Injectable()
 export class OrderService {
     constructor(
         @Inject('ORDER_SERVICE') private client: ClientProxy,
-        private readonly prisma: PrismaService,
+        private readonly prismaService: PrismaService,
         private readonly orderValidation: OrderValidationService,
     ) {}
 
@@ -40,7 +43,7 @@ export class OrderService {
     async getOrder(query: GetOrderDto, user: User) {
         await this.orderValidation.getOrderValidate(query, user);
 
-        const account = await this.prisma.account.findUnique({
+        const account = await this.prismaService.account.findUnique({
             where: {
                 accountNumber: query.accountnumber,
             },
@@ -57,7 +60,7 @@ export class OrderService {
             findConditions.status = query.status;
         }
 
-        return await this.prisma.order.findMany({
+        return await this.prismaService.order.findMany({
             where: findConditions,
             include: {
                 stocks: {
@@ -67,5 +70,75 @@ export class OrderService {
                 },
             },
         });
+    }
+
+    async buy(dto: BuyDto, data: BuyOrder, stockId: number) {
+        const accountId = (
+            await this.prismaService.account.findUnique({
+                where: { accountNumber: data.accountNumber },
+                select: { id: true },
+            })
+        ).id;
+
+        // 잠글 금액 계산
+        // 시장가를 경우는 당일 상한가를 기준으로 계산
+        if (dto.orderType === OrderType.limit) {
+            data.lockedBalance = data.number * data.price;
+        } else {
+            // 상한가 조회
+            const todayHistory = await this.prismaService.stockHistory.findUnique({
+                where: {
+                    stockId_date: {
+                        stockId: stockId,
+                        date: getKstDate(0),
+                    },
+                },
+                select: {
+                    upperLimit: true,
+                },
+            });
+
+            data.lockedBalance = data.number * Number(todayHistory.upperLimit);
+        }
+
+        // 매수 가능 예수금 잠금 로직
+        const rs = await this.prismaService.$executeRaw`
+            UPDATE accounts
+            SET can_money = can_money - ${data.lockedBalance}
+            WHERE id = ${accountId}
+            AND can_money >= ${data.lockedBalance}
+        `;
+
+        if (rs === 0) {
+            throw new OrderException('NOT_ENOUGH_MONEY');
+        }
+
+        return accountId;
+    }
+
+    async sell(data: SellOrder) {
+        const accountId = (
+            await this.prismaService.account.findUnique({
+                where: { accountNumber: data.accountNumber },
+                select: {
+                    id: true,
+                },
+            })
+        ).id;
+
+        // 가능 수량 잠금 로직
+        const rs = await this.prismaService.$executeRaw`
+            UPDATE user_stocks
+            SET can_number = can_number - ${data.number}
+            WHERE account_id = ${accountId}
+            AND stock_id = ${data.stockId}
+            AND can_number >= ${data.number}
+        `;
+
+        if (rs === 0) {
+            throw new OrderException('NOT_ENOUGH_STOCK');
+        }
+
+        return accountId;
     }
 }
