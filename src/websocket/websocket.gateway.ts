@@ -18,7 +18,6 @@ import { OrderWsService } from './service/order-ws.service';
 import { AccountWsService } from './service/account-ws.service';
 import { ChartWsService } from './service/chart-ws.service';
 
-// @TODO 방 나가기 기능 추가 해야됨
 @UseGuards(WsGuard)
 @WebSocketGateway(parseInt(process.env.WEBSOCKET_PORT), {
     namespace: '/stock',
@@ -70,12 +69,28 @@ export class WebsocketGateway
         this.stockWsService.onJoinStockPriceRoom(stockId, client);
     }
 
+    @SubscribeMessage('leaveStockRoom')
+    handleLeaveStockRoom(
+        @MessageBody() stockId: number,
+        @ConnectedSocket() client: CustomSocket,
+    ) {
+        this.stockWsService.onLeaveStockRoom(stockId, client);
+    }
+
+    @SubscribeMessage('leaveStockPriceRoom')
+    handleLeaveStockPriceRoom(
+        @MessageBody() stockId: number,
+        @ConnectedSocket() client: CustomSocket,
+    ) {
+        this.stockWsService.onLeaveStockPriceRoom(stockId, client);
+    }
+
     @SubscribeMessage('joinAccountRoom')
-    handleJoinAccountRoom(
+    async handleJoinAccountRoom(
         @ConnectedSocket() client: CustomSocket,
         @MessageBody() accountId?: number,
     ) {
-        this.accountWsService.onJoinAccountRoom(client, accountId);
+        await this.accountWsService.onJoinAccountRoom(client, accountId);
     }
 
     @SubscribeMessage('joinChartRoom')
@@ -85,5 +100,22 @@ export class WebsocketGateway
         @MessageBody('type') type: ChartType,
     ) {
         this.chartWsService.onJoinChartWsRoom(stockId, type, client);
+    }
+
+    @SubscribeMessage('leaveChartRoom')
+    handleLeaveChartRoom(
+        @ConnectedSocket() client: CustomSocket,
+        @MessageBody('stockId') stockId: number,
+        @MessageBody('type') type: ChartType,
+    ) {
+        this.chartWsService.onLeaveChartWsRoom(stockId, type, client);
+    }
+
+    @SubscribeMessage('leaveAccountRoom')
+    handleLeaveAccountRoom(
+        @ConnectedSocket() client: CustomSocket,
+        @MessageBody() accountId: number,
+    ) {
+        this.accountWsService.onLeaveAccountRoom(client, accountId);
     }
 }

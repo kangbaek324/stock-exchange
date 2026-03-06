@@ -4,4 +4,5 @@ export type BuyOrder = {
     price: number;
     number: number;
     orderType: 'limit' | 'market';
+    lockedBalance: number;
 };
