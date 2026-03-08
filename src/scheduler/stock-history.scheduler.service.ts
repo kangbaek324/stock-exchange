@@ -12,7 +12,9 @@ export class StockHistorySchedulerService {
     ) {}
 
     // 일별 시세 세팅
-    @Cron('0 0 0 * * *') // 12시 자정
+    @Cron('0 0 0 * * *', {
+        timeZone: 'Asia/Seoul',
+    }) // 12시 자정
     async handleStockHistoryDay() {
         const today = getKstDate(0);
 
