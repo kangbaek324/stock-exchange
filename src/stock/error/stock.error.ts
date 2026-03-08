@@ -6,6 +6,16 @@ export const StockError = {
         status: HttpStatus.NOT_FOUND,
         message: '존재하지 않는 종목코드입니다.',
     },
+    STOCK_ALREADY_EXIST: {
+        code: 'STOCK_002',
+        status: HttpStatus.CONFLICT,
+        message: '이미 상장된 주식입니다.',
+    },
+    STOCK_HISTORIES_NOT_FOUND: {
+        code: 'ORDER_010',
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: '서버에 오류가 발생했습니다.',
+    },
 } as const;
 
 export type StockErrorKey = keyof typeof StockError;

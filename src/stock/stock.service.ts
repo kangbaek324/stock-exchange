@@ -2,10 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { StockException } from './error/stock.exception';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
+import { StockDto } from './dto/stock.dto';
+import { PrismaClient } from '@prisma/client';
+import { StockLimitService } from './order/services/stock-limit.service';
+import { OrderException } from './order/error/order.exception';
 
 @Injectable()
 export class StockService {
-    constructor(private readonly prismaService: PrismaService) {}
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly stockLimitService: StockLimitService,
+    ) {}
 
     // @TODO 현재 높은 동락률 순으로 제공 옵션 추가 필요
     async getStockList() {
@@ -59,5 +66,38 @@ export class StockService {
         }
 
         return { ...stock, price: stock.price.toString() };
+    }
+
+    async createStock(dto: StockDto) {
+        await this.prismaService.$transaction(async (tx: PrismaClient) => {
+            const isExist = await tx.stock.findUnique({
+                where: { name: dto.name },
+                select: { id: true },
+            });
+
+            if (isExist) throw new StockException('STOCK_ALREADY_EXIST');
+
+            const stock = await tx.stock.create({
+                data: {
+                    name: dto.name,
+                    price: dto.listingPrice,
+                },
+            });
+
+            const limits = this.stockLimitService.getStockLimit(dto.listingPrice);
+
+            await tx.stockHistory.create({
+                data: {
+                    stockId: stock.id,
+                    open: dto.listingPrice,
+                    high: dto.listingPrice,
+                    low: dto.listingPrice,
+                    close: dto.listingPrice,
+                    date: getKstDate(0),
+                    lowerLimit: limits.lowerLimit,
+                    upperLimit: limits.upperLimit,
+                },
+            });
+        });
     }
 }

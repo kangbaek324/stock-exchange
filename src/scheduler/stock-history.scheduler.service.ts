@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import { StockException } from 'src/stock/error/stock.exception';
 import { StockLimitService } from 'src/stock/order/services/stock-limit.service';
 
 @Injectable()
@@ -24,10 +25,12 @@ export class StockHistorySchedulerService {
             const prevStockHistory = await this.prismaService.stockHistory.findFirst({
                 where: { stockId: stock.id },
                 orderBy: { date: 'desc' },
+                select: { close: true },
             });
+            if (!prevStockHistory) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
 
-            const prevClose = prevStockHistory?.close ?? stock.price;
-            const limits = await this.stockLimitService.getStockLimit(stock.id);
+            const prevClose = Number(prevStockHistory.close);
+            const limits = this.stockLimitService.getStockLimit(prevClose);
 
             await this.prismaService.stockHistory.upsert({
                 where: {
