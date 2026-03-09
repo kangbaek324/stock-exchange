@@ -78,6 +78,7 @@ async function bootstrap() {
     app.useGlobalInterceptors(new SuccessResponseInterceptor());
     app.useGlobalFilters(new GlobalExceptionFilter());
 
+    app.setGlobalPrefix('api');
     await app.listen(parseInt(process.env.SERVER_PORT), '0.0.0.0');
 }
 bootstrap();
