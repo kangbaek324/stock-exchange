@@ -3,6 +3,7 @@ import { STOCK_LIMIT } from 'src/common/consants/stock.constants';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { OrderException } from '../error/order.exception';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
+import { StockException } from 'src/stock/error/stock.exception';
 
 @Injectable()
 export class StockLimitService {
@@ -18,7 +19,7 @@ export class StockLimitService {
         return 1000;
     }
 
-    tickSizeCheck(price) {
+    tickSizeCheck(price: number) {
         let check = false;
         if (price >= 2000 && price < 5000) {
             if (price % 5 !== 0) check = true;
@@ -37,8 +38,9 @@ export class StockLimitService {
         if (check) throw new OrderException('INVALID_ORDER_TICK_SIZE');
     }
 
-    async limitSizeCheck(stockId: number, price) {
+    async limitSizeCheck(stockId: number, price: number) {
         // @TODO Redis 적용필요
+        // 전일 종가 조회
         const prevHistory = await this.prismaService.stockHistory.findUnique({
             where: {
                 stockId_date: {
@@ -61,37 +63,16 @@ export class StockLimitService {
                 })
             )?.open;
 
-        if (!prevClose) throw new OrderException('STOCK_HISTORIES_NOT_FOUND');
+        if (!prevClose) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
 
-        const upperRaw = Math.floor(Number(prevClose) * (1 + STOCK_LIMIT.UPPER_RATE));
-        const lowerRaw = Math.ceil(Number(prevClose) * (1 - STOCK_LIMIT.LOWER_RATE));
+        const limits = this.getStockLimit(Number(prevClose));
 
-        const upperTick = this.getTickSize(upperRaw);
-        const lowerTick = this.getTickSize(lowerRaw);
-
-        const upperLimit = Math.floor(upperRaw / upperTick) * upperTick;
-        const lowerLimit = Math.ceil(lowerRaw / lowerTick) * lowerTick;
-
-        if (price > upperLimit || price < lowerLimit) {
+        if (price > limits.upperLimit || price < limits.lowerLimit) {
             throw new OrderException('PRICE_OUT_OF_LIMIT');
         }
     }
 
-    async getStockLimit(stockId: number) {
-        // @TODO Redis 적용필요
-        const prevHistory = await this.prismaService.stockHistory.findFirst({
-            where: {
-                stockId: stockId,
-            },
-            orderBy: {
-                date: 'desc',
-            },
-            select: {
-                close: true,
-            },
-        });
-
-        const prevClose = 9500;
+    getStockLimit(prevClose: number) {
         const upperRaw = Math.floor(Number(prevClose) * (1 + STOCK_LIMIT.UPPER_RATE));
         const lowerRaw = Math.ceil(Number(prevClose) * (1 - STOCK_LIMIT.LOWER_RATE));
 

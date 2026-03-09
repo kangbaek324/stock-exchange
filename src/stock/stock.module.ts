@@ -8,6 +8,6 @@ import { StockLimitService } from './order/services/stock-limit.service';
 @Module({
     imports: [OrderModule, ChartModule],
     controllers: [StockController],
-    providers: [StockService],
+    providers: [StockService, StockLimitService],
 })
 export class StockModule {}
