@@ -60,7 +60,7 @@ export class StockWsService {
             low: stockHistoryDB?.low.toString() ?? stockInfo.price,
             high: stockHistoryDB?.high.toString() ?? stockInfo.price,
             close: stockHistoryDB?.close.toString() ?? stockInfo.price,
-            open: stockHistoryDB?.open.toString() ?? stockInfo.price,
+            open: stockHistoryDB?.open?.toString() ?? stockInfo.price,
             upperLimit: stockHistoryDB?.upperLimit.toString(),
             lowerLimit: stockHistoryDB?.lowerLimit.toString(),
         };
