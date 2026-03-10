@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { ClientProxy } from '@nestjs/microservices';
-import { OrderType, User } from '@prisma/client';
+import { OrderType, PrismaClient, User } from '@prisma/client';
 import { OrderValidationService } from './order-validation.service';
 import { BuyOrder } from '../type/buy.type';
 import { SellOrder } from '../type/sell.type';
@@ -11,6 +11,7 @@ import { GetOrderDto } from '../dto/get-order.dto';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { OrderException } from '../error/order.exception';
 import { BuyDto } from '../dto/buy.dto';
+import { EditDto } from '../dto/edit.dto';
 
 @Injectable()
 export class OrderService {
@@ -69,6 +70,27 @@ export class OrderService {
                     },
                 },
             },
+        });
+    }
+
+    async edit(dto: EditOrder) {
+        await this.prismaService.$transaction(async (tx: PrismaClient) => {
+            const [order] = await tx.$queryRaw<{ price: bigint; number: bigint }[]>`
+                SELECT price, number FROM orders WHERE id = ${dto.orderId} FOR UPDATE
+            `;
+
+            const increment = (order.price - BigInt(dto.price)) * order.number;
+
+            const rs = await tx.$executeRaw`
+                UPDATE accounts
+                SET can_money = can_money + ${increment}
+                WHERE account_number = ${dto.accountNumber}
+                AND can_money + ${increment} >= 0
+            `;
+
+            if (rs === 0) {
+                throw new OrderException('NOT_ENOUGH_MONEY');
+            }
         });
     }
 

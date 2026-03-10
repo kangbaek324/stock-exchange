@@ -41,6 +41,7 @@ export class OrderController {
             orderId: id,
         };
         await this.orderValidationService.editValidate(data, user);
+        await this.orderService.edit(data);
 
         return await this.orderService.sendMQ(data, user, 'edit');
     }
