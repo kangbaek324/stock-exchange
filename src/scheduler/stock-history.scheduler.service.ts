@@ -19,35 +19,38 @@ export class StockHistorySchedulerService {
     async handleStockHistoryDay() {
         const today = getKstDate(0);
 
-        const stocks = await this.prismaService.stock.findMany();
+        const stocks = await this.prismaService.stock.findMany({
+            include: {
+                stockHistory: {
+                    orderBy: { date: 'desc' },
+                    take: 1,
+                    select: { close: true },
+                },
+            },
+        });
 
-        for (const stock of stocks) {
-            const prevStockHistory = await this.prismaService.stockHistory.findFirst({
-                where: { stockId: stock.id },
-                orderBy: { date: 'desc' },
-                select: { close: true },
-            });
-            if (!prevStockHistory) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
+        const data = stocks.map((stock) => {
+            if (!stock.stockHistory[0])
+                throw new StockException('STOCK_HISTORIES_NOT_FOUND');
 
-            const prevClose = Number(prevStockHistory.close);
+            const prevClose = Number(stock.stockHistory[0].close);
             const limits = this.stockLimitService.getStockLimit(prevClose);
 
-            await this.prismaService.stockHistory.upsert({
-                where: {
-                    stockId_date: { stockId: stock.id, date: today },
-                },
-                create: {
-                    stockId: stock.id,
-                    date: today,
-                    open: prevClose,
-                    close: prevClose,
-                    high: prevClose,
-                    low: prevClose,
-                    upperLimit: limits.upperLimit,
-                    lowerLimit: limits.lowerLimit,
-                },
-                update: {},
-            });
-        }
+            return {
+                stockId: stock.id,
+                date: today,
+                open: null,
+                close: prevClose,
+                high: prevClose,
+                low: prevClose,
+                upperLimit: limits.upperLimit,
+                lowerLimit: limits.lowerLimit,
+            };
+        });
+
+        await this.prismaService.stockHistory.createMany({
+            data,
+            skipDuplicates: true,
+        });
     }
 }
