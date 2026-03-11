@@ -1,4 +1,10 @@
+import { Order } from '@prisma/client';
+
 export type OrderEventedData = {
-    stockId: number;
-    updatedOrders: { id: number; accountId: number }[];
+    type: 'buy' | 'sell' | 'edit' | 'cancel';
+    stock: {
+        id: number;
+        nextPrice: number;
+    };
+    updatedOrders: Order[];
 };

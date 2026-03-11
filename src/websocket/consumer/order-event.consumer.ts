@@ -20,16 +20,19 @@ export class OrderEventConsumer {
         const channel = context.getChannelRef();
         const originalMsg = context.getMessage();
 
+        const stockId = mqData.stock.id;
+        const stockPirce = mqData.stock.nextPrice;
+
         try {
             await Promise.all([
-                this.stockWsService.updateStock(mqData.stockId),
-                this.stockWsService.updateStockPrice(mqData.stockId),
                 mqData.updatedOrders.length >= 2
-                    ? this.chartWsService.updateChart(mqData.stockId)
+                    ? (this.chartWsService.updateChart(stockId),
+                      this.stockWsService.updateStock(stockId),
+                      this.stockWsService.updateStockPrice(stockId, stockPirce))
                     : Promise.resolve(),
                 ...mqData.updatedOrders.map((order) =>
                     Promise.all([
-                        this.orderWsService.updateOrder(order.accountId, order.id),
+                        this.orderWsService.updateOrder(order.accountId, order),
                         this.accountWsService.updateAccount(order.accountId),
                     ]),
                 ),

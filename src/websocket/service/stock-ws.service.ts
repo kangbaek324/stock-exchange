@@ -135,16 +135,9 @@ export class StockWsService {
     }
 
     // 프론트에서 계좌 연산을 위한 주식 가격 전송
-    async updateStockPrice(stockId: number) {
-        const stock = await this.prismaService.stock.findUnique({
-            where: { id: stockId },
-            select: { price: true },
-        });
-
-        const stockPrice = stock.price.toString();
-
+    async updateStockPrice(stockId: number, price: number) {
         this.server
             .to('stockId_price_' + stockId.toString())
-            .emit('stockPriceUpdated_' + stockId, stockPrice);
+            .emit('stockPriceUpdated_' + stockId, price);
     }
 }

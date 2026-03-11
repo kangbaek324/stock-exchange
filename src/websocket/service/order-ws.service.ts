@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+import { Order, OrderStatus } from '@prisma/client';
 import { Server } from 'socket.io';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -59,6 +59,7 @@ export class OrderWsService {
             matchNumber: order.matchNumber.toString(),
             status: order.status,
             tradingType: order.tradingType,
+            createdAt: order.createdAt,
         });
 
         returnData.executionOrder = executionOrder.map(toOrderData);
@@ -67,18 +68,8 @@ export class OrderWsService {
         this.server.to('accountId_' + accountId).emit('orderInit', returnData);
     }
 
-    async updateOrder(accountId: number, orderId: number) {
-        const order = await this.prismaService.order.findUnique({
-            where: { id: orderId },
-        });
-
-        const returnData = {
-            ...order,
-            number: order.number.toString(),
-            matchNumber: order.matchNumber.toString(),
-            price: order.price.toString(),
-        };
-
-        this.server.to('accountId_' + accountId).emit('orderUpdated', returnData);
+    // 특정 주문 업데이트
+    async updateOrder(accountId: number, order: Order) {
+        this.server.to('accountId_' + accountId).emit('orderUpdated', order);
     }
 }
