@@ -59,7 +59,7 @@ export class OrderWsService {
             matchNumber: order.matchNumber.toString(),
             status: order.status,
             tradingType: order.tradingType,
-            createAt: order.createdAt,
+            createdAt: order.createdAt,
         });
 
         returnData.executionOrder = executionOrder.map(toOrderData);
