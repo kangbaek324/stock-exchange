@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaClient, User } from '@prisma/client';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { TransferDto } from './dto/transfer.dto';
 import { AccountException } from './error/account.exception';
-import { DepositDto } from './dto/deposit.dto';
+import { withDrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
+import { TransferAccountBalanceDto } from './dto/transfer-account-balance.dto';
+import { DepositAccountBalanceDto } from './dto/deposit-account-balance.dto copy';
 
 @Injectable()
 export class AccountService {
@@ -56,7 +57,11 @@ export class AccountService {
         };
     }
 
-    async transferAccountBalance(user: User, dto: TransferDto, accountNumber: number) {
+    async transferAccountBalance(
+        user: User,
+        dto: TransferAccountBalanceDto,
+        accountNumber: number,
+    ) {
         const amount = BigInt(dto.amount);
         const senderAccountNumber = accountNumber;
         const receiverAccountNumber = dto.toAccountNumber;
@@ -120,7 +125,7 @@ export class AccountService {
         };
     }
 
-    async depositAccount(dto: DepositDto, accountNumber: number) {
+    async depositAccountBalance(dto: DepositAccountBalanceDto, accountNumber: number) {
         const amount = dto.amount;
 
         await this.prismaService.account.update({
@@ -136,7 +141,7 @@ export class AccountService {
         });
     }
 
-    async withdrawAccount(dto: DepositDto, accountNumber: number) {
+    async withdrawAccountBalance(dto: withDrawAccountBalanceDto, accountNumber: number) {
         const amount = dto.amount;
 
         await this.prismaService.account.update({

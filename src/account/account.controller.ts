@@ -11,8 +11,7 @@ import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { AccountService } from './account.service';
 import { User } from '@prisma/client';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
-import { TransferDto } from './dto/transfer.dto';
-import { DepositDto } from './dto/deposit.dto';
+import { DepositAccountBalanceDto, withDrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
 
 @Controller('accounts')
 @UseGuards(JwtAuthGuard)
@@ -40,19 +39,24 @@ export class AccountController {
 
     // ADMIN
     @Post('/:accountNumber/deposit')
-    async depositAccount(
+    async depositAccountBalance(
         @Param('accountNumber') accountNumber: number,
-        @Body() dto: DepositDto,
+        @Body() dto: DepositAccountBalanceDto,
     ) {
-        return await this.accountService.depositAccount(dto, accountNumber);
+        return await this.accountService.depositAccountBalance(dto, accountNumber);
     }
 
     //ADMIN
     @Post('/:accountNumber/withdraw')
-    async withdrawAccount(
+    async withdrawAccountBalance(
         @Param('accountNumber') accountNumber: number,
-        @Body() dto: DepositDto,
+        @Body() dto: withDrawAccountBalanceDto,
     ) {
-        return await this.accountService.withdrawAccount(dto, accountNumber);
+        return await this.accountService.withdrawAccountBalance(dto, accountNumber);
+    }
+
+    @Post('/:accountNumber/stocks/:id/deposit')
+    async depositStock(@Param('accountNumber') accountNumber: number, @Body dto:) {
+
     }
 }
