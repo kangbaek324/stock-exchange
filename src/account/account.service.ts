@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaClient, User } from '@prisma/client';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { TransferDto } from './dto/transfer.dto';
 import { AccountException } from './error/account.exception';
+import { DepositDto } from './dto/deposit.dto';
 
 @Injectable()
 export class AccountService {
@@ -60,6 +61,8 @@ export class AccountService {
         const senderAccountNumber = accountNumber;
         const receiverAccountNumber = dto.toAccountNumber;
 
+        if (senderAccountNumber > 99999) throw new BadRequestException();
+
         if (senderAccountNumber === receiverAccountNumber)
             throw new AccountException('NOT_ALLOWED_TRANSFER_SELF');
 
@@ -115,5 +118,37 @@ export class AccountService {
         return {
             message: '정상 처리되었습니다.',
         };
+    }
+
+    async depositAccount(dto: DepositDto, accountNumber: number) {
+        const amount = dto.amount;
+
+        await this.prismaService.account.update({
+            where: { accountNumber: accountNumber },
+            data: {
+                money: {
+                    increment: amount,
+                },
+                canMoney: {
+                    increment: amount,
+                },
+            },
+        });
+    }
+
+    async withdrawAccount(dto: DepositDto, accountNumber: number) {
+        const amount = dto.amount;
+
+        await this.prismaService.account.update({
+            where: { accountNumber: accountNumber },
+            data: {
+                money: {
+                    decrement: amount,
+                },
+                canMoney: {
+                    decrement: amount,
+                },
+            },
+        });
     }
 }
