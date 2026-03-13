@@ -11,7 +11,10 @@ import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { AccountService } from './account.service';
 import { User } from '@prisma/client';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
-import { DepositAccountBalanceDto, withDrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
+import { withDrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
+import { DepositStockDto } from './dto/deposit-stock.dto';
+import { TransferAccountBalanceDto } from './dto/transfer-account-balance.dto';
+import { DepositAccountBalanceDto } from './dto/deposit-account-balance.dto copy';
 
 @Controller('accounts')
 @UseGuards(JwtAuthGuard)
@@ -32,7 +35,7 @@ export class AccountController {
     async transferAccountBalance(
         @GetUser() user: User,
         @Param('accountNumber', ParseIntPipe) accountNumber: number,
-        @Body() dto: TransferDto,
+        @Body() dto: TransferAccountBalanceDto,
     ) {
         return await this.accountService.transferAccountBalance(user, dto, accountNumber);
     }
@@ -55,8 +58,21 @@ export class AccountController {
         return await this.accountService.withdrawAccountBalance(dto, accountNumber);
     }
 
-    @Post('/:accountNumber/stocks/:id/deposit')
-    async depositStock(@Param('accountNumber') accountNumber: number, @Body dto:) {
+    @Post('/:accountNumber/stocks/:stockId/deposit')
+    async depositStock(
+        @Param('accountNumber') accountNumber: number,
+        @Param('stockId') stockId: number,
+        @Body() dto: DepositStockDto,
+    ) {
+        return await this.accountService.depositStock(dto, accountNumber, stockId);
+    }
 
+    @Post('/:accountNumber/stocks/:stockId/withdraw')
+    async withdrawStock(
+        @Param('accountNumber') accountNumber: number,
+        @Param('stockId') stockId: number,
+        @Body() dto: DepositStockDto,
+    ) {
+        return await this.accountService.withdrawStock(dto, accountNumber, stockId);
     }
 }
