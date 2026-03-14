@@ -41,6 +41,11 @@ export const AuthError = {
         status: HttpStatus.UNAUTHORIZED,
         message: 'AccessToken이 유효하지 않습니다.',
     },
+    PERMISSION_DENIED: {
+        code: 'AUTH_009',
+        status: HttpStatus.UNAUTHORIZED,
+        message: '권한이 부족합니다.',
+    },
 } as const;
 
 export type AuthErrorKey = keyof typeof AuthError;

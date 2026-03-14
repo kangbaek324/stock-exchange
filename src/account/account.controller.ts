@@ -15,6 +15,8 @@ import { withDrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
 import { DepositStockDto } from './dto/deposit-stock.dto';
 import { TransferAccountBalanceDto } from './dto/transfer-account-balance.dto';
 import { DepositAccountBalanceDto } from './dto/deposit-account-balance.dto copy';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { AdminGuard } from 'src/auth/guard/admin.guard';
 
 @Controller('accounts')
 @UseGuards(JwtAuthGuard)
@@ -40,7 +42,10 @@ export class AccountController {
         return await this.accountService.transferAccountBalance(user, dto, accountNumber);
     }
 
-    // ADMIN
+    // ADMIN //
+
+    @UseGuards(AdminGuard)
+    @Roles('ADMIN')
     @Post('/:accountNumber/deposit')
     async depositAccountBalance(
         @Param('accountNumber') accountNumber: number,
@@ -49,7 +54,8 @@ export class AccountController {
         return await this.accountService.depositAccountBalance(dto, accountNumber);
     }
 
-    //ADMIN
+    @UseGuards(AdminGuard)
+    @Roles('ADMIN')
     @Post('/:accountNumber/withdraw')
     async withdrawAccountBalance(
         @Param('accountNumber') accountNumber: number,
@@ -58,6 +64,8 @@ export class AccountController {
         return await this.accountService.withdrawAccountBalance(dto, accountNumber);
     }
 
+    @UseGuards(AdminGuard)
+    @Roles('ADMIN')
     @Post('/:accountNumber/stocks/:stockId/deposit')
     async depositStock(
         @Param('accountNumber') accountNumber: number,
@@ -67,6 +75,8 @@ export class AccountController {
         return await this.accountService.depositStock(dto, accountNumber, stockId);
     }
 
+    @UseGuards(AdminGuard)
+    @Roles('ADMIN')
     @Post('/:accountNumber/stocks/:stockId/withdraw')
     async withdrawStock(
         @Param('accountNumber') accountNumber: number,
