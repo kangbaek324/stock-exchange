@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { OrderStatus, OrderType, TradingType, User } from '@prisma/client';
+import { OrderStatus, OrderType, StockStatus, TradingType, User } from '@prisma/client';
 import { AccountException } from 'src/account/error/account.exception';
 import { OrderException } from '../error/order.exception';
 import { CancelOrder } from '../type/cancel.type';
@@ -14,12 +14,12 @@ import { StockLimitService } from './stock-limit.service';
 @Injectable()
 export class OrderValidationService {
     constructor(
-        private readonly prisma: PrismaService,
+        private readonly prismaService: PrismaService,
         private readonly stockLimitService: StockLimitService,
     ) {}
 
     async getAccount(accountNumber: number) {
-        const account = await this.prisma.account.findUnique({
+        const account = await this.prismaService.account.findUnique({
             where: { accountNumber: accountNumber },
             select: {
                 userId: true,
@@ -40,6 +40,17 @@ export class OrderValidationService {
         }
     }
 
+    private async isStockTradable(stockId: number) {
+        const stock = await this.prismaService.stock.findUnique({
+            where: { id: stockId },
+            select: { status: true },
+        });
+
+        if (!stock) throw new StockException('STOCK_NOT_FOUND');
+        else if (stock.status !== StockStatus.LISTED)
+            throw new StockException('STOCK_NOT_TRADABLE');
+    }
+
     async tradeValidate(data: BuyOrder | SellOrder, user: User) {
         this.stockLimitService.tickSizeCheck(data.price);
 
@@ -48,14 +59,9 @@ export class OrderValidationService {
             throw new AccountException('ACCOUNT_FORBIDDEN');
         }
 
-        const stockIdCheck = await this.prisma.stock.findUnique({
-            where: { id: data.stockId },
-            select: { id: true },
-        });
+        await this.isStockTradable(data.stockId);
 
-        if (!stockIdCheck) {
-            throw new StockException('STOCK_NOT_FOUND');
-        } else if (data.price <= 0 && data.orderType === OrderType.limit) {
+        if (data.price <= 0 && data.orderType === OrderType.limit) {
             throw new OrderException('INVALID_ORDER_PRICE');
         } else if (data.number <= 0) {
             throw new OrderException('INVALID_ORDER_NUMBER');
@@ -74,7 +80,7 @@ export class OrderValidationService {
             throw new AccountException('ACCOUNT_FORBIDDEN');
         }
 
-        const order = await this.prisma.order.findUnique({
+        const order = await this.prismaService.order.findUnique({
             where: {
                 id: data.orderId,
             },
@@ -104,7 +110,7 @@ export class OrderValidationService {
             throw new AccountException('ACCOUNT_FORBIDDEN');
         }
 
-        const order = await this.prisma.order.findUnique({
+        const order = await this.prismaService.order.findUnique({
             where: {
                 id: data.orderId,
             },

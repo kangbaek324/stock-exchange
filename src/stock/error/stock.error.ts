@@ -12,9 +12,14 @@ export const StockError = {
         message: '이미 상장된 주식입니다.',
     },
     STOCK_HISTORIES_NOT_FOUND: {
-        code: 'ORDER_010',
+        code: 'STOCK_003',
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: '서버에 오류가 발생했습니다.',
+    },
+    STOCK_NOT_TRADABLE: {
+        code: 'STOCK_004',
+        status: HttpStatus.CONFLICT,
+        message: '주문이 불가능한 주식입니다.',
     },
 } as const;
 
