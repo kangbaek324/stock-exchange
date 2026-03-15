@@ -120,6 +120,7 @@ export class StockWsService {
             number: row.number.toString(),
         }));
 
+        // 전일 종가 조회 아상함
         let data = {
             stockInfo: {
                 ...stockInfo,

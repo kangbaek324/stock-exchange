@@ -6,6 +6,7 @@ import { StockDto } from './dto/stock.dto';
 import { PrismaClient } from '@prisma/client';
 import { StockLimitService } from './order/services/stock-limit.service';
 import { OrderException } from './order/error/order.exception';
+import { StockStatusDto } from './dto/stock-status.dto';
 
 @Injectable()
 export class StockService {
@@ -99,5 +100,26 @@ export class StockService {
                 },
             });
         });
+    }
+
+    async updateStockStatus(dto: StockStatusDto, stockId: number) {
+        const isExistStock = await this.prismaService.stock.findUnique({
+            where: { id: stockId },
+            select: { id: true },
+        });
+        if (!isExistStock) throw new StockException('STOCK_NOT_FOUND');
+
+        const stock = await this.prismaService.stock.update({
+            where: { id: stockId },
+            data: {
+                status: dto.status,
+                updatedAt: getKstDate(0),
+            },
+        });
+
+        return {
+            ...stock,
+            price: stock.price.toString(),
+        };
     }
 }
