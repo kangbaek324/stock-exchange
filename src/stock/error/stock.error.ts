@@ -16,6 +16,11 @@ export const StockError = {
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: '서버에 오류가 발생했습니다.',
     },
+    STOCK_NOT_TRADABLE: {
+        code: 'STOCK_004',
+        status: HttpStatus.CONFLICT,
+        message: '주문이 불가능한 주식입니다.',
+    },
 } as const;
 
 export type StockErrorKey = keyof typeof StockError;

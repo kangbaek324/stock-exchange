@@ -113,7 +113,6 @@ export class StockService {
             where: { id: stockId },
             data: {
                 status: dto.status,
-                updatedAt: getKstDate(0),
             },
         });
 
