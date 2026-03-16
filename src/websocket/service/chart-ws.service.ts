@@ -128,9 +128,71 @@ export class ChartWsService {
         } else return redisData.map((d) => JSON.parse(d));
     }
 
+    getCandleTime(matchedAt: Date, type: ChartType): string {
+        const d = new Date(matchedAt);
+        const minutes = d.getUTCMinutes();
+
+        switch (type) {
+            case '1m':
+                d.setUTCMinutes(minutes, 0, 0);
+                break;
+            case '5m':
+                d.setUTCMinutes(Math.floor(minutes / 5) * 5, 0, 0);
+                break;
+            case '15m':
+                d.setUTCMinutes(Math.floor(minutes / 15) * 15, 0, 0);
+                break;
+            case '30m':
+                d.setUTCMinutes(Math.floor(minutes / 30) * 30, 0, 0);
+                break;
+            case '60m':
+                d.setUTCMinutes(0, 0, 0);
+                break;
+            case '1d':
+                d.setUTCHours(0, 0, 0, 0);
+                break;
+        }
+
+        return d.toISOString();
+    }
+
     // 현재 봉 차트 전송
-    async updateChart(stockId: number) {
+    async updateChart(
+        stockId: number,
+        nextPrice: number,
+        volume: number,
+        matchedAt: Date,
+    ) {
         const chartmList: ChartType[] = ['1m', '5m', '15m', '30m', '60m', '1d'];
+
+        for (const type of chartmList) {
+            const key = `chart:${stockId}:${type}`;
+            const lastRaw = await this.redis.lindex(key, -1);
+            const last = JSON.parse(lastRaw);
+
+            const candleTime = this.getCandleTime(matchedAt, type); // 현재 봉 시작 시간
+
+            // 같은 봉 → 업데이트
+            if (last.time === candleTime) {
+                last.high = Math.max(last.high, nextPrice);
+                last.low = Math.min(last.low, nextPrice);
+                last.close = nextPrice;
+                last.volume += volume;
+                await this.redis.lset(key, -1, JSON.stringify(last));
+            } else {
+                // 새 봉 → 추가
+                const newCandle = {
+                    time: candleTime,
+                    open: nextPrice,
+                    high: nextPrice,
+                    low: nextPrice,
+                    close: nextPrice,
+                    volume,
+                };
+                await this.redis.rpush(key, JSON.stringify(newCandle));
+                await this.redis.ltrim(key, -500, -1);
+            }
+        }
 
         chartmList.forEach(async (m) => {
             this.server

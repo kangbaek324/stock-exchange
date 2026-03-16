@@ -22,11 +22,18 @@ export class OrderEventConsumer {
 
         const stockId = mqData.stock.id;
         const stockPirce = mqData.stock.nextPrice;
+        const matchedAt = mqData.matchedAt;
+        const volume = mqData.volume;
 
         try {
             await Promise.all([
                 mqData.updatedOrders.length >= 2
-                    ? (this.chartWsService.updateChart(stockId),
+                    ? (this.chartWsService.updateChart(
+                          stockId,
+                          stockPirce,
+                          volume,
+                          matchedAt,
+                      ),
                       this.stockWsService.updateStock(stockId),
                       this.stockWsService.updateStockPrice(stockId, stockPirce))
                     : Promise.resolve(),
