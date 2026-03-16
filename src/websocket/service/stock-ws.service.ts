@@ -51,7 +51,7 @@ export class StockWsService {
             price: stockInfoDB.price.toString(),
         };
 
-        // 가격 정보 조회
+        // 오늘 주식 가격 정보 조회
         let stockHistoryDB = await this.prismaService.stockHistory.findUnique({
             where: { stockId_date: { stockId: stockId, date: today } },
         });
@@ -75,9 +75,12 @@ export class StockWsService {
             },
             select: { close: true },
         });
+
+        // 전일 종가 조회시 만약 존재하지 않는다면
+        // 레코드가 한개 = 오늘 상장이기 때문에 당일 시가를 반환한다.
         let previousClose = previousCloseDB?.close.toString() ?? stockHistory.open;
 
-        // 호가창 조회
+        // 매수 호가창 조회
         let buyOrderbook: any[] = await this.prismaService.$queryRaw`
           SELECT price, SUM(number - match_number) AS number
           FROM orders o
@@ -87,6 +90,7 @@ export class StockWsService {
           LIMIT 10
         `;
 
+        // 매도 호가창 조회
         let sellOrderbook: any[] = await this.prismaService.$queryRaw`
           SELECT price, SUM(number - match_number) AS number
           FROM orders o
@@ -96,6 +100,7 @@ export class StockWsService {
           LIMIT 10
         `;
 
+        // 체결 주문 조회 (최대 50개)
         let matchData: any[] = await this.prismaService.$queryRaw`
           select (select price from orders o where o.id = om.initial_order_id) as price, number, (select trading_type from orders o where o.id = om.order_id) as type
           from order_matches om where stock_id = ${stockId}
@@ -120,7 +125,6 @@ export class StockWsService {
             number: row.number.toString(),
         }));
 
-        // 전일 종가 조회 아상함
         let data = {
             stockInfo: {
                 ...stockInfo,
