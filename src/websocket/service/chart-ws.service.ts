@@ -178,7 +178,7 @@ export class ChartWsService {
                 last.high = Math.max(last.high, nextPrice);
                 last.low = Math.min(last.low, nextPrice);
                 last.close = nextPrice;
-                last.volume += volume;
+                last.volume = Number(last.volume) + volume;
                 await this.redis.lset(key, -1, JSON.stringify(last));
             } else {
                 // 새 봉 → 추가

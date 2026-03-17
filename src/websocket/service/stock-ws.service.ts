@@ -116,7 +116,6 @@ export class StockWsService {
             WHERE stock_id = ${stockId} AND trading_type = "buy" AND status = "n"
             GROUP BY trading_type, price
             ORDER BY price DESC
-            LIMIT 10
             `;
 
             buyOrderbook = buyOrderbook.map((row) => ({
@@ -125,17 +124,19 @@ export class StockWsService {
                 number: row.number.toString(),
             }));
 
-            // Redis 캐싱
+            // Redis 캐싱 (score=price, member=number)
             const pipeline = this.redis.pipeline();
             for (const row of buyOrderbook) {
-                pipeline.zadd(`orderbook:${stockId}:buy`, Number(row.number), row.price);
+                pipeline.zadd(`orderbook:${stockId}:buy`, row.price, row.number);
             }
             await pipeline.exec();
+
+            buyOrderbook = buyOrderbook.slice(0, 10);
         } else {
             for (let i = 0; i < redisBuyOrderbook.length; i += 2) {
                 buyOrderbook.push({
-                    price: redisBuyOrderbook[i],
-                    number: redisBuyOrderbook[i + 1],
+                    number: redisBuyOrderbook[i],
+                    price: redisBuyOrderbook[i + 1],
                 });
             }
         }
@@ -157,7 +158,6 @@ export class StockWsService {
             WHERE stock_id = ${stockId} AND trading_type = "sell" AND status = "n"
             GROUP BY trading_type, price
             ORDER BY price ASC
-            LIMIT 10
             `;
 
             sellOrderbook = sellOrderbook.map((row) => ({
@@ -166,17 +166,19 @@ export class StockWsService {
                 number: row.number.toString(),
             }));
 
-            // Redis 캐싱
+            // Redis 캐싱 (score=price, member=number)
             const pipeline = this.redis.pipeline();
             for (const row of sellOrderbook) {
-                pipeline.zadd(`orderbook:${stockId}:sell`, Number(row.number), row.price);
+                pipeline.zadd(`orderbook:${stockId}:sell`, row.price, row.number);
             }
             await pipeline.exec();
+
+            sellOrderbook = sellOrderbook.slice(0, 10);
         } else {
             for (let i = 0; i < redisSellOrderbook.length; i += 2) {
                 sellOrderbook.push({
-                    price: redisSellOrderbook[i],
-                    number: redisSellOrderbook[i + 1],
+                    number: redisSellOrderbook[i],
+                    price: redisSellOrderbook[i + 1],
                 });
             }
         }
@@ -193,7 +195,7 @@ export class StockWsService {
     async sendMatchedList(stockId: number) {
         const key = `matchedList:${stockId}`;
         const redisMatchedList = await this.redis.lrange(key, 0, -1);
-        let matchedList;
+        let matchedList = [];
 
         // Redis에 캐싱된 값이 없다면
         if (redisMatchedList.length === 0) {
@@ -236,6 +238,7 @@ export class StockWsService {
                 });
             }),
         );
+        await this.redis.ltrim(`matchedList:${stockId}`, 0, 49);
     }
 
     // 호가창을 업데이트 함수
@@ -246,13 +249,24 @@ export class StockWsService {
         matchedList: { price: number; number: number }[],
         prevOrderPrice: number,
     ) {
-        // 0이 되면 삭제하는 스크립트 (Redis 동시성)
+        // score=price, member=number 구조에서 특정 price의 수량을 delta만큼 조정하는 스크립트
+        // ARGV[1]=delta, ARGV[2]=price(score)
         const script = `
-                local val = redis.call('zincrby', KEYS[1], ARGV[1], ARGV[2])
-                if tonumber(val) <= 0 then
-                    redis.call('zrem', KEYS[1], ARGV[2])
+                local members = redis.call('zrangebyscore', KEYS[1], ARGV[2], ARGV[2])
+                if #members > 0 then
+                    local oldNumber = tonumber(members[1])
+                    local newNumber = oldNumber + tonumber(ARGV[1])
+                    redis.call('zrem', KEYS[1], members[1])
+                    if newNumber > 0 then
+                        redis.call('zadd', KEYS[1], ARGV[2], tostring(newNumber))
+                    end
+                    return newNumber
+                else
+                    if tonumber(ARGV[1]) > 0 then
+                        redis.call('zadd', KEYS[1], ARGV[2], ARGV[1])
+                    end
+                    return ARGV[1]
                 end
-                return val
             `;
 
         // 단일 호가 업데이트
@@ -269,7 +283,7 @@ export class StockWsService {
                 await this.redis.eval(script, 1, key, amount, price);
                 await this.redis.eval(script, 1, key, -amount, prevOrderPrice);
             } else {
-                await this.redis.zincrby(key, amount, price);
+                await this.redis.eval(script, 1, key, amount, price);
             }
         } else {
             // 여러 호가 업데이트
