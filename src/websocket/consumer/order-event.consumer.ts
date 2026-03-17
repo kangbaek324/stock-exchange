@@ -38,10 +38,11 @@ export class OrderEventConsumer {
             );
 
             await Promise.all([
-                // 주식이랑 호가창이랑 분리필요
-                this.stockWsService.updateStock(stockId),
+                this.stockWsService.sendOrderBook(stockId),
                 mqData.updatedOrders.length >= 2
                     ? Promise.all([
+                          this.stockWsService.sendStockInfo(stockId),
+                          this.stockWsService.sendMatchedList(stockId),
                           this.chartWsService.updateChart(
                               stockId,
                               stockPirce,

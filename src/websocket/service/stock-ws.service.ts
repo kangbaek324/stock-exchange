@@ -23,8 +23,10 @@ export class StockWsService {
         const stockIdToString = stockId.toString();
         client.join('stockId_' + stockIdToString);
 
-        // 초기 호가창 정보 전송
-        this.updateStock(stockId);
+        // 초기 데이터 전송
+        this.sendStockInfo(stockId);
+        this.sendOrderBook(stockId);
+        this.sendMatchedList(stockId);
     }
 
     onJoinStockPriceRoom(stockId: number, client: CustomSocket) {
@@ -41,20 +43,19 @@ export class StockWsService {
     }
 
     // 주식 가격과 호가창에 대한 정보 전송
-    // @TODO 현재는 전체 데이터 전송 최적화시 세부적으로 전송되도록 변경해야됨
-    async updateStock(stockId: number) {
+    async sendStockInfo(stockId: number) {
         const today = getKstDate();
         const yesterday = getKstDate(-1);
 
         // 주식 기본 정보 조회
-        const stockInfoDB = await this.prismaService.stock.findUnique({
+        const stockDB = await this.prismaService.stock.findUnique({
             where: { id: stockId },
             select: { id: true, name: true, price: true },
         });
 
-        let stockInfo = {
-            ...stockInfoDB,
-            price: stockInfoDB.price.toString(),
+        let stock = {
+            ...stockDB,
+            price: stockDB.price.toString(),
         };
 
         // 오늘 주식 가격 정보 조회
@@ -63,10 +64,10 @@ export class StockWsService {
         });
 
         const stockHistory = {
-            low: stockHistoryDB?.low.toString() ?? stockInfo.price,
-            high: stockHistoryDB?.high.toString() ?? stockInfo.price,
-            close: stockHistoryDB?.close.toString() ?? stockInfo.price,
-            open: stockHistoryDB?.open?.toString() ?? stockInfo.price,
+            low: stockHistoryDB?.low.toString() ?? stock.price,
+            high: stockHistoryDB?.high.toString() ?? stock.price,
+            close: stockHistoryDB?.close.toString() ?? stock.price,
+            open: stockHistoryDB?.open?.toString() ?? stock.price,
             upperLimit: stockHistoryDB?.upperLimit.toString(),
             lowerLimit: stockHistoryDB?.lowerLimit.toString(),
         };
@@ -86,14 +87,27 @@ export class StockWsService {
         // 레코드가 한개 = 오늘 상장이기 때문에 당일 시가를 반환한다.
         let previousClose = previousCloseDB?.close.toString() ?? stockHistory.open;
 
+        let data = {
+            ...stock,
+            previousClose,
+            ...stockHistory,
+        };
+
+        this.server.to('stockId_' + stockId.toString()).emit('stockInfoUpdated', data);
+    }
+
+    // 호가창 데이터 전송
+    async sendOrderBook(stockId: number) {
         // 매수호가 Redis 조회
         let buyOrderbook = [];
-        let redisBuyOrderbook = await this.redis.zrevrange(
+        const redisBuyOrderbook = await this.redis.zrevrange(
             `orderbook:${stockId}:buy`,
             0,
             9,
             'WITHSCORES',
         );
+
+        // 만약에 없다면 DB 조회
         if (redisBuyOrderbook.length === 0) {
             buyOrderbook = await this.prismaService.$queryRaw`
             SELECT price, SUM(number - match_number) AS number
@@ -127,12 +141,14 @@ export class StockWsService {
 
         // 매도 호가 Redis 조회
         let sellOrderbook = [];
-        let redisSellOrderbook = await this.redis.zrange(
+        const redisSellOrderbook = await this.redis.zrange(
             `orderbook:${stockId}:sell`,
             0,
             9,
             'WITHSCORES',
         );
+
+        // 만약에 없다면 DB 조회
         if (redisSellOrderbook.length === 0) {
             sellOrderbook = await this.prismaService.$queryRaw`
             SELECT price, SUM(number - match_number) AS number
@@ -164,31 +180,33 @@ export class StockWsService {
             }
         }
 
-        // 체결 주문 조회 (최대 50개)
-        let matchData: any[] = await this.prismaService.$queryRaw`
+        const data = {
+            buyOrderbook,
+            sellOrderbook,
+        };
+
+        this.server.to('stockId_' + stockId.toString()).emit('orderBookUpdated', data);
+    }
+
+    // 체결 기록 전송
+    async sendMatchedList(stockId: number) {
+        // @TODO Redis 적용하기
+        // 체결 주문 조회 최대 50개
+        let matchedData: any[] = await this.prismaService.$queryRaw`
           select (select price from orders o where o.id = om.initial_order_id) as price, number, (select trading_type from orders o where o.id = om.order_id) as type
           from order_matches om where stock_id = ${stockId}
           order by matched_at desc limit 50;
         `;
 
-        matchData = matchData.map((row) => ({
+        matchedData = matchedData.map((row) => ({
             ...row,
             price: row.price.toString(),
             number: row.number.toString(),
         }));
 
-        let data = {
-            stockInfo: {
-                ...stockInfo,
-                previousClose,
-                ...stockHistory,
-            },
-            buyOrderbookData: buyOrderbook,
-            sellOrderbookData: sellOrderbook,
-            match: matchData,
-        };
-
-        this.server.to('stockId_' + stockInfo.id.toString()).emit('stockUpdated', data);
+        this.server
+            .to('stockId_' + stockId.toString())
+            .emit('sendMatchedListUpdated', matchedData);
     }
 
     // 매칭 서버의 결과를 토대로 호가창을 업데이트 하는 함수
@@ -236,8 +254,6 @@ export class StockWsService {
                 },
                 {} as Record<number, number>,
             );
-
-            console.log(merged);
 
             // 객체를 [[key, value]]로 변환후 Redis 동시 반영
             await Promise.all(
