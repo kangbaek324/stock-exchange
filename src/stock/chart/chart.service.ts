@@ -39,7 +39,7 @@ export class ChartService {
 
                     const chartDataDB: any[] = await this.prismaService.$queryRaw`
                         SELECT 
-                            DATE_FORMAT(om.matched_at, CONCAT('%Y-%m-%d %H:', LPAD(FLOOR(MINUTE(om.matched_at) / ${time}) * ${time}, 2, '0'), ':00')) as time,
+                            DATE_FORMAT(om.matched_at, CONCAT('%Y-%m-%dT%H:', LPAD(FLOOR(MINUTE(om.matched_at) / ${time}) * ${time}, 2, '0'), ':00.000Z')) as time,
                             SUBSTRING_INDEX(GROUP_CONCAT(o.price ORDER BY om.matched_at ASC, om.id ASC), ',', 1) AS open,
                             MAX(o.price) AS high,
                             MIN(o.price) AS low,
@@ -73,7 +73,7 @@ export class ChartService {
                 case '1d': {
                     const chartDataDB: any[] = await this.prismaService.$queryRaw`
                         SELECT 
-                            sh.date AS time,
+                            DATE_FORMAT(sh.date, '%Y-%m-%dT00:00:00.000Z') AS time,
                             sh.high,
                             sh.low,
                             sh.close,

@@ -54,7 +54,7 @@ export class ChartWsService {
 
                     const chartDataDB: any[] = await this.prismaService.$queryRaw`
                                 SELECT 
-                                    DATE_FORMAT(om.matched_at, CONCAT('%Y-%m-%d %H:', LPAD(FLOOR(MINUTE(om.matched_at) / ${time}) * ${time}, 2, '0'), ':00')) as time,
+                                    DATE_FORMAT(om.matched_at, CONCAT('%Y-%m-%dT%H:', LPAD(FLOOR(MINUTE(om.matched_at) / ${time}) * ${time}, 2, '0'), ':00.000Z')) as time,
                                     SUBSTRING_INDEX(GROUP_CONCAT(o.price ORDER BY om.matched_at ASC, om.id ASC), ',', 1) AS open,
                                     MAX(o.price) AS high,
                                     MIN(o.price) AS low,
@@ -69,7 +69,7 @@ export class ChartWsService {
                                 WHERE 
                                     om.stock_id = ${stockId}
                                 GROUP BY time
-                                ORDER BY time
+                                ORDER BY time DESC
                                 limit 1;
                             `;
 
@@ -88,7 +88,7 @@ export class ChartWsService {
                 case '1d': {
                     const chartDataDB: any[] = await this.prismaService.$queryRaw`
                                 SELECT 
-                                    sh.date AS time,
+                                    DATE_FORMAT(sh.date, '%Y-%m-%dT00:00:00.000Z') AS time,
                                     sh.high,
                                     sh.low,
                                     sh.close,
@@ -195,10 +195,12 @@ export class ChartWsService {
             }
         }
 
-        chartmList.forEach(async (m) => {
-            this.server
-                .to(`chart_${stockId.toString()}_${m}`)
-                .emit(`chartUpdated_${m}`, await this.getCurrentCandle(stockId, m));
-        });
+        await Promise.all(
+            chartmList.map(async (m) => {
+                this.server
+                    .to(`chart_${stockId.toString()}_${m}`)
+                    .emit(`chartUpdated_${m}`, await this.getCurrentCandle(stockId, m));
+            }),
+        );
     }
 }
