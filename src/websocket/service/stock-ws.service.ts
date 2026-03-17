@@ -43,6 +43,7 @@ export class StockWsService {
     }
 
     // 주식 가격과 호가창에 대한 정보 전송
+    // @TODO Redis
     async sendStockInfo(stockId: number) {
         const today = getKstDate();
         const yesterday = getKstDate(-1);
@@ -190,31 +191,59 @@ export class StockWsService {
 
     // 체결 기록 전송
     async sendMatchedList(stockId: number) {
-        // @TODO Redis 적용하기
-        // 체결 주문 조회 최대 50개
-        let matchedData: any[] = await this.prismaService.$queryRaw`
-          select (select price from orders o where o.id = om.initial_order_id) as price, number, (select trading_type from orders o where o.id = om.order_id) as type
-          from order_matches om where stock_id = ${stockId}
-          order by matched_at desc limit 50;
-        `;
+        const key = `matchedList:${stockId}`;
+        const redisMatchedList = await this.redis.lrange(key, 0, -1);
+        let matchedList;
 
-        matchedData = matchedData.map((row) => ({
-            ...row,
-            price: row.price.toString(),
-            number: row.number.toString(),
-        }));
+        // Redis에 캐싱된 값이 없다면
+        if (redisMatchedList.length === 0) {
+            matchedList = await this.prismaService.$queryRaw`
+              select (select price from orders o where o.id = om.initial_order_id) as price, number, (select trading_type from orders o where o.id = om.order_id) as type
+              from order_matches om where stock_id = ${stockId}
+              order by matched_at desc limit 50;
+            `;
+
+            matchedList = matchedList.map((row) => ({
+                ...row,
+                price: row.price.toString(),
+                number: row.number.toString(),
+            }));
+
+            // Redis 캐싱
+            await this.redis.rpush(
+                key,
+                ...matchedList.map((item) => JSON.stringify(item)),
+            );
+        } else matchedList = redisMatchedList.map((d) => JSON.parse(d));
 
         this.server
             .to('stockId_' + stockId.toString())
-            .emit('sendMatchedListUpdated', matchedData);
+            .emit('sendMatchedListUpdated', matchedList);
     }
 
-    // 매칭 서버의 결과를 토대로 호가창을 업데이트 하는 함수
+    async updateMatchedList(
+        type: 'buy' | 'sell' | 'edit' | 'cancel',
+        stockId: number,
+        matchedList: { price: number; number: number }[],
+    ) {
+        await this.redis.lpush(
+            `matchedList:${stockId}`,
+            ...matchedList.map((item) => {
+                return JSON.stringify({
+                    price: item.price.toString(),
+                    number: item.number.toString(),
+                    type,
+                });
+            }),
+        );
+    }
+
+    // 호가창을 업데이트 함수
     async updateOrderbook(
         type: 'buy' | 'sell' | 'edit' | 'cancel',
         stockId: number,
         orders: Order[],
-        matchedList: { price: number; amount: number }[],
+        matchedList: { price: number; number: number }[],
         prevOrderPrice: number,
     ) {
         // 0이 되면 삭제하는 스크립트 (Redis 동시성)
@@ -248,8 +277,8 @@ export class StockWsService {
 
             // 같은 가격대 갯수 합산
             const merged = matchedList.reduce(
-                (acc, { price, amount }) => {
-                    acc[price] = (acc[price] ?? 0) + amount;
+                (acc, { price, number }) => {
+                    acc[price] = (acc[price] ?? 0) + number;
                     return acc;
                 },
                 {} as Record<number, number>,
@@ -257,8 +286,8 @@ export class StockWsService {
 
             // 객체를 [[key, value]]로 변환후 Redis 동시 반영
             await Promise.all(
-                Object.entries(merged).map(([price, amount]) =>
-                    this.redis.eval(script, 1, key, -amount, price),
+                Object.entries(merged).map(([price, number]) =>
+                    this.redis.eval(script, 1, key, -number, price),
                 ),
             );
         }

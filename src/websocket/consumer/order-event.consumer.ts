@@ -29,13 +29,16 @@ export class OrderEventConsumer {
         const matchedList = mqData.matchedList;
 
         try {
-            await this.stockWsService.updateOrderbook(
-                type,
-                stockId,
-                orders,
-                matchedList,
-                mqData.prevOrderPrice,
-            );
+            await Promise.all([
+                this.stockWsService.updateOrderbook(
+                    type,
+                    stockId,
+                    orders,
+                    matchedList,
+                    mqData.prevOrderPrice,
+                ),
+                this.stockWsService.updateMatchedList(type, stockId, matchedList),
+            ]);
 
             await Promise.all([
                 this.stockWsService.sendOrderBook(stockId),

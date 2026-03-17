@@ -9,6 +9,6 @@ export type OrderEventedData = {
     updatedOrders: Order[];
     volume: number;
     matchedAt: Date;
-    matchedList: { price: number; amount: number }[];
+    matchedList: { price: number; number: number }[];
     prevOrderPrice?: number;
 };

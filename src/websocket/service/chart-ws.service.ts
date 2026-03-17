@@ -165,13 +165,14 @@ export class ChartWsService {
     ) {
         const chartmList: ChartType[] = ['1m', '5m', '15m', '30m', '60m', '1d'];
 
+        // Redis 업데이트
         for (const type of chartmList) {
             const key = `chart:${stockId}:${type}`;
             const lastRaw = await this.redis.lindex(key, -1);
             const last = JSON.parse(lastRaw);
 
             const candleTime = this.getCandleTime(matchedAt, type); // 현재 봉 시작 시간
-
+            if (last === null) continue;
             // 같은 봉 → 업데이트
             if (last.time === candleTime) {
                 last.high = Math.max(last.high, nextPrice);
