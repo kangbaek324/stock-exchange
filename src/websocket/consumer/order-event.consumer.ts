@@ -20,24 +20,38 @@ export class OrderEventConsumer {
         const channel = context.getChannelRef();
         const originalMsg = context.getMessage();
 
+        const type = mqData.type;
         const stockId = mqData.stock.id;
         const stockPirce = mqData.stock.nextPrice;
         const matchedAt = mqData.matchedAt;
         const volume = mqData.volume;
+        const orders = mqData.updatedOrders;
+        const matchedList = mqData.matchedList;
 
         try {
+            await this.stockWsService.updateOrderbook(
+                type,
+                stockId,
+                orders,
+                matchedList,
+                mqData.prevOrderPrice,
+            );
+
             await Promise.all([
+                // 주식이랑 호가창이랑 분리필요
+                this.stockWsService.updateStock(stockId),
                 mqData.updatedOrders.length >= 2
-                    ? (this.chartWsService.updateChart(
-                          stockId,
-                          stockPirce,
-                          volume,
-                          matchedAt,
-                      ),
-                      this.stockWsService.updateStock(stockId),
-                      this.stockWsService.updateStockPrice(stockId, stockPirce))
+                    ? Promise.all([
+                          this.chartWsService.updateChart(
+                              stockId,
+                              stockPirce,
+                              volume,
+                              matchedAt,
+                          ),
+                          this.stockWsService.updateStockPrice(stockId, stockPirce),
+                      ])
                     : Promise.resolve(),
-                ...mqData.updatedOrders.map((order) =>
+                ...orders.map((order) =>
                     Promise.all([
                         this.orderWsService.updateOrder(order.accountId, order),
                         this.accountWsService.updateAccount(order.accountId),
