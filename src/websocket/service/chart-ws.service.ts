@@ -7,6 +7,12 @@ import { StockException } from 'src/stock/error/stock.exception';
 import Redis from 'ioredis';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 
+/**
+ *  @TODO
+ *  Redis에 들어가는 숫자값이 모두 String으로 들어가고 있음
+ *  JSON.parse를 하게되면 원래 숫자값을 알아서 복원해주기때문에 number로 변환해서 넣도록 하는게 좋을것 같음
+ *  지금 코드에서 UpdfaetChart voulme부분만 숫자로 저장되고 있음
+ */
 @Injectable()
 export class ChartWsService {
     constructor(

@@ -1,5 +1,7 @@
+import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import Redis from 'ioredis';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { StockException } from 'src/stock/error/stock.exception';
@@ -11,6 +13,7 @@ export class StockHistorySchedulerService implements OnApplicationBootstrap {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly stockLimitService: StockLimitService,
+        @InjectRedis() private readonly redis: Redis,
     ) {}
 
     async onApplicationBootstrap() {
@@ -36,16 +39,17 @@ export class StockHistorySchedulerService implements OnApplicationBootstrap {
         stocks.map(async (stock) => {
             const stockHistory = stock.stockHistory[0];
 
-            if (stockHistory.date < today) {
+            if (stockHistory && stockHistory.date < today) {
                 const prevClose = Number(stockHistory.close);
                 const limits = this.stockLimitService.getStockLimit(prevClose);
                 let standardDate = stockHistory.date;
-                let fillData = [];
+                let dbData = [];
+                let redisData = [];
 
                 while (standardDate < today) {
                     standardDate.setDate(standardDate.getDate() + 1);
 
-                    fillData.push({
+                    dbData.push({
                         stockId: stock.id,
                         low: prevClose,
                         high: prevClose,
@@ -55,11 +59,32 @@ export class StockHistorySchedulerService implements OnApplicationBootstrap {
                         upperLimit: limits.upperLimit,
                         date: new Date(standardDate),
                     });
+
+                    redisData.push({
+                        time: new Date(standardDate),
+                        low: prevClose,
+                        high: prevClose,
+                        close: prevClose,
+                        open: prevClose,
+                        volume: '0', // chart-ws.service 주석 참고
+                    });
                 }
 
                 await this.prismaService.stockHistory.createMany({
-                    data: fillData,
+                    data: dbData,
                 });
+
+                const lastRaw = await this.redis.lindex(`chart:${stock.id}:1d`, -1);
+                const lastTime = lastRaw ? JSON.parse(lastRaw).time : null;
+                const newRedisData = lastTime
+                    ? redisData.filter((d) => new Date(d.time).toISOString() > lastTime)
+                    : redisData;
+                if (newRedisData.length > 0) {
+                    await this.redis.rpush(
+                        `chart:${stock.id}:1d`,
+                        ...newRedisData.map((d) => JSON.stringify(d)),
+                    );
+                }
             }
         });
     }
@@ -67,7 +92,7 @@ export class StockHistorySchedulerService implements OnApplicationBootstrap {
     // 일별 시세 세팅
     @Cron('0 0 0 * * *', {
         timeZone: 'Asia/Seoul',
-    }) // 12시 자정
+    }) // 한국 기준 12시 자정
     async handleStockHistoryDay() {
         const today = getKstDate(0);
 
@@ -81,14 +106,16 @@ export class StockHistorySchedulerService implements OnApplicationBootstrap {
             },
         });
 
-        const data = stocks.map((stock) => {
+        const dbData = [];
+
+        stocks.map(async (stock) => {
             if (!stock.stockHistory[0])
                 throw new StockException('STOCK_HISTORIES_NOT_FOUND');
 
             const prevClose = Number(stock.stockHistory[0].close);
             const limits = this.stockLimitService.getStockLimit(prevClose);
 
-            return {
+            dbData.push({
                 stockId: stock.id,
                 date: today,
                 open: null,
@@ -97,11 +124,32 @@ export class StockHistorySchedulerService implements OnApplicationBootstrap {
                 low: prevClose,
                 upperLimit: limits.upperLimit,
                 lowerLimit: limits.lowerLimit,
-            };
+            });
+
+            const redisData = [
+                {
+                    time: new Date(today),
+                    low: prevClose,
+                    high: prevClose,
+                    close: prevClose,
+                    open: prevClose,
+                    volume: '0', // chart-ws.service 주석 참고
+                },
+            ];
+
+            const lastRaw = await this.redis.lindex(`chart:${stock.id}:1d`, -1);
+            const last = lastRaw ? JSON.parse(lastRaw) : null;
+            const todayStr = new Date(today).toISOString();
+            if (!last || last.time !== todayStr) {
+                await this.redis.rpush(
+                    `chart:${stock.id}:1d`,
+                    ...redisData.map((d) => JSON.stringify(d)),
+                );
+            }
         });
 
         await this.prismaService.stockHistory.createMany({
-            data,
+            data: dbData,
             skipDuplicates: true,
         });
     }

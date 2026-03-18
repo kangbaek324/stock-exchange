@@ -212,10 +212,12 @@ export class StockWsService {
             }));
 
             // Redis 캐싱
-            await this.redis.rpush(
-                key,
-                ...matchedList.map((item) => JSON.stringify(item)),
-            );
+            if (matchedList.length > 0) {
+                await this.redis.rpush(
+                    key,
+                    ...matchedList.map((item) => JSON.stringify(item)),
+                );
+            }
         } else matchedList = redisMatchedList.map((d) => JSON.parse(d));
 
         this.server
@@ -228,6 +230,7 @@ export class StockWsService {
         stockId: number,
         matchedList: { price: number; number: number }[],
     ) {
+        if (matchedList.length === 0) return;
         await this.redis.lpush(
             `matchedList:${stockId}`,
             ...matchedList.map((item) => {
