@@ -126,10 +126,12 @@ export class ChartWsService {
                     throw new ChartException('NOT_SUPPORT_TYPE');
             }
 
-            await this.redis.rpush(
-                `chart:${stockId}:${type}`,
-                ...chartData.map((d) => JSON.stringify(d)),
-            );
+            if (chartData.length > 0) {
+                await this.redis.rpush(
+                    `chart:${stockId}:${type}`,
+                    ...chartData.map((d) => JSON.stringify(d)),
+                );
+            }
             return chartData;
         } else return redisData.map((d) => JSON.parse(d));
     }
