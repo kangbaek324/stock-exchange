@@ -49,6 +49,62 @@
 - Cache: Redis
 - Message Queue: RabbitMQ
 
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- MySQL
+- Redis
+- RabbitMQ
+
+### Installation
+
+```bash
+git clone https://github.com/KRONEX-Stock-Exchange/stock-exchange-backend.git
+cd stock-exchange-backend
+npm install
+```
+
+### Environment Variables
+
+루트 디렉토리에 `.env` 파일을 생성하고 아래 변수를 설정하세요.
+
+```env
+SERVER_PORT=
+
+DATABASE_URL=mysql://USER:PASSWORD@HOST:PORT/DB_NAME
+
+REDIS_HOST=
+REDIS_PORT=
+REDIS_PASSWORD=
+
+RABBITMQ_URL=amqp://USER:PASSWORD@HOST:PORT
+
+ACCESS_TOKEN_SECRET=
+REFRESH_TOKEN_SECRET=
+
+WEBSOCKET_PORT=
+```
+
+### Database Setup
+
+```bash
+npx prisma migrate deploy
+npm run prisma:seed
+```
+
+### Run
+
+```bash
+# 개발 모드
+npm run start:dev
+
+# 프로덕션
+npm run build
+npm run start:prod
+```
+
 ## 📁 Repository
 
 Mathcing Server <a href="https://github.com/KRONEX-Stock-Exchange/kronex-matching-server">here</a>
