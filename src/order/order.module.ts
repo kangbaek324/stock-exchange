@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { OrderService } from './services/order.service';
 import { OrderValidationService } from './services/order-validation.service';
 import { StockLimitService } from './services/stock-limit.service';
+import { OrderPublishRelay } from './services/order-publish.relay';
 
 @Module({
     imports: [
@@ -28,6 +29,11 @@ import { StockLimitService } from './services/stock-limit.service';
         ]),
     ],
     controllers: [OrderController, StockOrderController],
-    providers: [OrderService, OrderValidationService, StockLimitService],
+    providers: [
+        OrderService,
+        OrderValidationService,
+        StockLimitService,
+        OrderPublishRelay,
+    ],
 })
 export class OrderModule {}

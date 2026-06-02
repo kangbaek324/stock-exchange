@@ -14,50 +14,36 @@ import { User } from '@prisma/client';
 import { CancelDto } from '../dto/cancel.dto';
 import { EditDto } from '../dto/edit.dto';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
-import { OrderValidationService } from '../services/order-validation.service';
 import { OrderService } from '../services/order.service';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
 export class OrderController {
-    constructor(
-        private readonly orderService: OrderService,
-        private readonly orderValidationService: OrderValidationService,
-    ) {}
+    constructor(private readonly orderService: OrderService) {}
 
+    // 주문 조회
     @Get('/')
     async getOrder(@Query() query: GetOrderDto, @GetUser() user: User) {
         return this.orderService.getOrder(query, user);
     }
 
+    // 주문 정정
     @Put('/:id')
     async edit(
         @Body() dto: EditDto,
         @GetUser() user: User,
-        @Param('id') id: number,
+        @Param('id') id: string,
     ): Promise<unknown> {
-        const data = {
-            ...dto,
-            orderId: id,
-        };
-        await this.orderValidationService.editValidate(data, user);
-        await this.orderService.edit(data);
-
-        return await this.orderService.sendMQ(data, user, 'edit');
+        return this.orderService.createOrder(user, { type: 'edit', orderId: id, dto });
     }
 
+    // 주문 취소
     @Delete('/:id')
     async cancel(
         @Body() dto: CancelDto,
         @GetUser() user: User,
-        @Param('id') id: number,
+        @Param('id') id: string,
     ): Promise<unknown> {
-        const data = {
-            ...dto,
-            orderId: id,
-        };
-        await this.orderValidationService.cancelValidate(data, user);
-
-        return await this.orderService.sendMQ(data, user, 'cancel');
+        return this.orderService.createOrder(user, { type: 'cancel', orderId: id, dto });
     }
 }

@@ -9,6 +9,7 @@ import { StockException } from 'src/stock/error/stock.exception';
 export class StockLimitService {
     constructor(private prismaService: PrismaService) {}
 
+    // 가격당 호가 단위 반환
     private getTickSize(price: number) {
         if (price < 2000) return 1;
         if (price < 5000) return 5;
@@ -19,6 +20,7 @@ export class StockLimitService {
         return 1000;
     }
 
+    // 호가 틱 유효성 검사
     tickSizeCheck(price: number) {
         let check = false;
         if (price >= 2000 && price < 5000) {
@@ -38,6 +40,7 @@ export class StockLimitService {
         if (check) throw new OrderException('INVALID_ORDER_TICK_SIZE');
     }
 
+    // 주문 가격이 상하한을 넘기지 않는지 검사
     async limitSizeCheck(stockId: number, price: number) {
         // @TODO Redis 적용필요
         // 전일 종가 조회
@@ -72,6 +75,7 @@ export class StockLimitService {
         }
     }
 
+    // 전날 종가 기준으로 당일 주식 상하한 계산
     getStockLimit(prevClose: number) {
         const upperRaw = Math.floor(Number(prevClose) * (1 + STOCK_LIMIT.UPPER_RATE));
         const lowerRaw = Math.ceil(Number(prevClose) * (1 - STOCK_LIMIT.LOWER_RATE));

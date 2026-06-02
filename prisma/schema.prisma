@@ -15,6 +15,8 @@ enum OrderType {
 enum TradingType {
   BUY
   SELL
+  EDIT
+  CANCEL
 }
 
 enum CursorType {
@@ -23,7 +25,9 @@ enum CursorType {
 }
 
 enum OrderStatus {
-  OPEN // 주문 호가창 진입
+  RECEIVED // 접수됨 (DB 기록 완료, 큐 적재 전)
+  OPEN // 큐 적재 성공 (엔진으로 전달된 활성 주문)
+  FILLED // 완전 체결되어 종료
   CANCELED // 주문 취소
   REPLACED // 정정 주문으로 대체되어 닫힘
   REJECTED // 거부됨
@@ -141,6 +145,7 @@ model UserStock {
 // 주문
 model Order {
   id             BigInt             @id @default(autoincrement())
+  targetId       BigInt?            @map("target_id") // 정정/취소 대상 원주문 (신규 주문이면 null)
   accountId      Int                @map("account_id")
   stockId        Int                @map("stock_id")
   price          BigInt             @db.UnsignedBigInt
@@ -150,14 +155,19 @@ model Order {
   status         OrderStatus        @default(RECEIVED)
   rejectReason   OrderRejectReason? @map("reject_reason") // status=REJECTED일 때만
   tradingType    TradingType        @map("trading_type")
+  publishedAt    DateTime?          @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
   createdAt      DateTime           @default(now()) @map("created_at")
 
   account Account @relation(fields: [accountId], references: [id])
   stock   Stock   @relation(fields: [stockId], references: [id])
 
+  target     Order?  @relation("OrderTarget", fields: [targetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  targetedBy Order[] @relation("OrderTarget")
+
   tradesAsMaker Trade[] @relation("TradeMaker")
   tradesAsTaker Trade[] @relation("TradeTaker")
 
+  @@index([publishedAt]) // 릴레이가 미발행 주문 스캔
   @@map("orders")
 }
 

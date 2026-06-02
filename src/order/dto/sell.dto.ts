@@ -1,10 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsInt } from 'class-validator';
-
-enum OrderType {
-    limit = 'limit',
-    market = 'market',
-}
+import { OrderType } from '@prisma/client';
 
 export class SellDto {
     @ApiProperty({
@@ -26,11 +22,12 @@ export class SellDto {
         description: '주문 수량',
     })
     @IsInt()
-    number: number;
+    quantity: number;
 
     @ApiProperty({
-        example: 'limit',
-        description: '주문 유헝',
+        example: 'LIMIT',
+        description: '주문 유형',
+        enum: OrderType,
     })
     @IsEnum(OrderType)
     orderType: OrderType;

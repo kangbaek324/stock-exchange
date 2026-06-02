@@ -46,6 +46,11 @@ export const OrderError = {
         status: HttpStatus.BAD_REQUEST,
         message: '주문 제한 가격을 넘은 주문입니다.',
     },
+    ORDER_ENQUEUE_FAILED: {
+        code: 'ORDER_010',
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        message: '주문 접수에 실패했습니다. 잠시 후 다시 시도해주세요.',
+    },
 } as const;
 
 export type OrderErrorKey = keyof typeof OrderError;

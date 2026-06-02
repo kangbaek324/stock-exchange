@@ -1,43 +1,175 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { ClientProxy } from '@nestjs/microservices';
-import { OrderType, PrismaClient, User } from '@prisma/client';
-import { OrderValidationService } from './order-validation.service';
-import { BuyOrder } from '../type/buy.type';
-import { SellOrder } from '../type/sell.type';
-import { CancelOrder } from '../type/cancel.type';
-import { EditOrder } from '../type/edit.type';
+import { OrderStatus, Prisma, TradingType, User } from '@prisma/client';
+import { lastValueFrom, retry, timer } from 'rxjs';
+import { OrderValidationService, TargetOrder } from './order-validation.service';
+import { OrderCommand } from '../type/order-command.type';
+import { OrderMessage } from '../type/order-message.type';
 import { GetOrderDto } from '../dto/get-order.dto';
-import { getKstDate } from 'src/common/helpers/get-kst-date';
-import { OrderException } from '../error/order.exception';
-import { BuyDto } from '../dto/buy.dto';
-import { EditDto } from '../dto/edit.dto';
 
+// 주문 생성 필드
+const ORDER_MESSAGE_SELECT = {
+    id: true,
+    targetId: true,
+    accountId: true,
+    stockId: true,
+    price: true,
+    quantity: true,
+    orderType: true,
+    tradingType: true,
+} satisfies Prisma.OrderSelect;
+
+type PersistedOrder = Prisma.OrderGetPayload<{ select: typeof ORDER_MESSAGE_SELECT }>;
+
+const PUBLISH_RETRY = {
+    count: 3,
+    delay: (_err: unknown, n: number) => timer(100 * 2 ** n),
+};
+
+/**
+ * Flow
+ *
+ * 1. DB 주문생성 (Status: RECEIVED)
+ * 2. MQ 발행 시도
+ *  2-1. 성공시 -> (Status: OPEN)
+ *  2-2. 실패시 -> (Status: RECEIVED) 유지 및 별도 릴레이가 발행시도
+ */
 @Injectable()
 export class OrderService {
+    private readonly logger = new Logger(OrderService.name);
+
     constructor(
         @Inject('ORDER_SERVICE') private client: ClientProxy,
         private readonly prismaService: PrismaService,
         private readonly orderValidation: OrderValidationService,
     ) {}
 
-    async sendMQ(
-        data: BuyOrder | SellOrder | CancelOrder | EditOrder,
-        user: User,
-        type: 'buy' | 'sell' | 'cancel' | 'edit',
-    ) {
-        const mqData = {
-            data,
-            type: type,
-            user,
-            timestamp: Number(process.hrtime.bigint()),
-        };
-        await this.client.connect();
-
-        this.client.emit('order.created', mqData);
+    // 주문 생성
+    async createOrder(user: User, command: OrderCommand) {
+        const { accountId, target } = await this.orderValidation.validate(command, user);
+        const order = await this.persistOrder(command, accountId, target);
+        await this.publishAndMark(order);
 
         return {
             message: '주문이 접수되었습니다.',
+            orderId: order.id.toString(),
+        };
+    }
+
+    // 주문 (DB) 생성
+    // 정정, 취소 주문의 TargetId는 원주문을 가르킴
+    private async persistOrder(
+        command: OrderCommand,
+        accountId: number,
+        target: TargetOrder | null,
+    ): Promise<PersistedOrder> {
+        switch (command.type) {
+            case 'buy':
+            case 'sell':
+                return this.prismaService.order.create({
+                    data: {
+                        accountId,
+                        stockId: command.stockId,
+                        price: BigInt(command.dto.price),
+                        quantity: BigInt(command.dto.quantity),
+                        filledQuantity: BigInt(0),
+                        orderType: command.dto.orderType,
+                        tradingType:
+                            command.type === 'buy' ? TradingType.BUY : TradingType.SELL,
+                    },
+                    select: ORDER_MESSAGE_SELECT,
+                });
+            // 정정, 취소 주문은 매칭엔진에게 트리거만 하는 역할
+            // 주문 대체 처리, 잔량 계산 후 새 주문 생성은 매칭엔진이 처리
+            case 'edit':
+                return this.prismaService.order.create({
+                    data: {
+                        targetId: target.id,
+                        accountId,
+                        stockId: target.stockId,
+                        price: BigInt(command.dto.price), // 정정가
+                        quantity: BigInt(0),
+                        filledQuantity: BigInt(0),
+                        orderType: target.orderType,
+                        tradingType: TradingType.EDIT,
+                    },
+                    select: ORDER_MESSAGE_SELECT,
+                });
+            case 'cancel':
+                return this.prismaService.order.create({
+                    data: {
+                        targetId: target.id,
+                        accountId,
+                        stockId: target.stockId,
+                        price: target.price,
+                        quantity: BigInt(0),
+                        filledQuantity: BigInt(0),
+                        orderType: target.orderType,
+                        tradingType: TradingType.CANCEL,
+                    },
+                    select: ORDER_MESSAGE_SELECT,
+                });
+        }
+    }
+
+    // MQ에 주문 발행
+    private async publishAndMark(order: PersistedOrder) {
+        // MQ로 주문 발행 후 확인 까지 대기
+        try {
+            await lastValueFrom(
+                this.client
+                    .emit('order.created', this.toMessage(order))
+                    .pipe(retry(PUBLISH_RETRY)),
+            );
+        } catch (err) {
+            // 실패시 별도 릴레이가 처리
+            this.logger.warn(
+                `order.created 발행 실패 (orderId=${order.id})`,
+                err instanceof Error ? err.stack : err,
+            );
+            return;
+        }
+
+        // 발행 성공시 status=OPEN + publishedAt로 업데이트
+        await this.prismaService.order.update({
+            where: { id: order.id },
+            data: { status: OrderStatus.OPEN, publishedAt: new Date() },
+        });
+    }
+
+    // 릴레이용: 아직 큐 적재 안 된(RECEIVED·publishedAt=null) 주문을 재발행
+    // in-flight 요청과의 경합을 피하려 생성 후 일정 시간 지난 것만 대상으로 함
+    async republishPending() {
+        // 팬딩 주문 조회
+        const pending = await this.prismaService.order.findMany({
+            where: {
+                publishedAt: null,
+                status: OrderStatus.RECEIVED,
+                createdAt: { lt: new Date(Date.now() - 2000) },
+            },
+            select: ORDER_MESSAGE_SELECT,
+            take: 100,
+            orderBy: { id: 'asc' },
+        });
+
+        // 주문 발행
+        for (const order of pending) {
+            await this.publishAndMark(order);
+        }
+    }
+
+    // BigInt 필드를 string으로 변환해 JSON 직렬화 가능한 메시지로 변환
+    private toMessage(order: PersistedOrder): OrderMessage {
+        return {
+            id: order.id.toString(),
+            targetId: order.targetId?.toString() ?? null,
+            accountId: order.accountId,
+            stockId: order.stockId,
+            price: order.price.toString(),
+            quantity: order.quantity.toString(),
+            orderType: order.orderType,
+            tradingType: order.tradingType,
         };
     }
 
@@ -53,7 +185,7 @@ export class OrderService {
             },
         });
 
-        let findConditions: any = {
+        const findConditions: { accountId: number; status?: GetOrderDto['status'] } = {
             accountId: account.id,
         };
 
@@ -64,103 +196,12 @@ export class OrderService {
         return await this.prismaService.order.findMany({
             where: findConditions,
             include: {
-                stocks: {
+                stock: {
                     select: {
                         name: true,
                     },
                 },
             },
         });
-    }
-
-    async edit(dto: EditOrder) {
-        await this.prismaService.$transaction(async (tx: PrismaClient) => {
-            const [order] = await tx.$queryRaw<{ price: bigint; number: bigint }[]>`
-                SELECT price, number FROM orders WHERE id = ${dto.orderId} FOR UPDATE
-            `;
-
-            const increment = (order.price - BigInt(dto.price)) * order.number;
-
-            const rs = await tx.$executeRaw`
-                UPDATE accounts
-                SET can_money = can_money + ${increment}
-                WHERE account_number = ${dto.accountNumber}
-                AND can_money + ${increment} >= 0
-            `;
-
-            if (rs === 0) {
-                throw new OrderException('NOT_ENOUGH_MONEY');
-            }
-        });
-    }
-
-    async buy(dto: BuyDto, data: BuyOrder, stockId: number) {
-        const accountId = (
-            await this.prismaService.account.findUnique({
-                where: { accountNumber: data.accountNumber },
-                select: { id: true },
-            })
-        ).id;
-
-        // 잠글 금액 계산
-        // 시장가를 경우는 당일 상한가를 기준으로 계산
-        if (dto.orderType === OrderType.limit) {
-            data.lockedBalance = data.number * data.price;
-        } else {
-            // 상한가 조회
-            const todayHistory = await this.prismaService.stockHistory.findUnique({
-                where: {
-                    stockId_date: {
-                        stockId: stockId,
-                        date: getKstDate(0),
-                    },
-                },
-                select: {
-                    upperLimit: true,
-                },
-            });
-
-            data.lockedBalance = data.number * Number(todayHistory.upperLimit);
-        }
-
-        // 매수 가능 예수금 잠금
-        const rs = await this.prismaService.$executeRaw`
-            UPDATE accounts
-            SET can_money = can_money - ${data.lockedBalance}
-            WHERE id = ${accountId}
-            AND can_money >= ${data.lockedBalance}
-        `;
-
-        if (rs === 0) {
-            throw new OrderException('NOT_ENOUGH_MONEY');
-        }
-
-        return accountId;
-    }
-
-    async sell(data: SellOrder) {
-        const accountId = (
-            await this.prismaService.account.findUnique({
-                where: { accountNumber: data.accountNumber },
-                select: {
-                    id: true,
-                },
-            })
-        ).id;
-
-        // 가능 수량 잠금 로직
-        const rs = await this.prismaService.$executeRaw`
-            UPDATE user_stocks
-            SET can_number = can_number - ${data.number}
-            WHERE account_id = ${accountId}
-            AND stock_id = ${data.stockId}
-            AND can_number >= ${data.number}
-        `;
-
-        if (rs === 0) {
-            throw new OrderException('NOT_ENOUGH_STOCK');
-        }
-
-        return accountId;
     }
 }
