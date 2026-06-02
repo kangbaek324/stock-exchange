@@ -23,7 +23,6 @@ enum CursorType {
 }
 
 enum OrderStatus {
-  RECEIVED // 주문 접수만
   OPEN // 주문 호가창 진입
   CANCELED // 주문 취소
   REPLACED // 정정 주문으로 대체되어 닫힘
