@@ -8,19 +8,34 @@ datasource db {
 }
 
 enum OrderType {
-  limit
-  market
+  LIMIT // 지정가
+  MARKET // 시장가
 }
 
 enum TradingType {
-  buy
-  sell
+  BUY
+  SELL
+}
+
+enum CursorType {
+  DB
+  MQ
 }
 
 enum OrderStatus {
-  y
-  n
-  c
+  RECEIVED // 주문 접수만
+  OPEN // 주문 호가창 진입
+  CANCELED // 주문 취소
+  REPLACED // 정정 주문으로 대체되어 닫힘
+  REJECTED // 거부됨
+}
+
+enum OrderRejectReason {
+  INSUFFICIENT_BALANCE // 예수금 부족
+  INSUFFICIENT_STOCK // 보유 수량 부족
+  PRICE_OUT_OF_LIMIT // 상/하한가 벗어남
+  STOCK_NOT_TRADABLE // 거래정지/상장폐지 종목
+  ALREADY_PROCESSED // 이미 처리(체결/취소)된 주문
 }
 
 enum Role {
@@ -29,9 +44,9 @@ enum Role {
 }
 
 enum StockStatus {
-  LISTED
-  SUSPENDED
-  DELISTED
+  LISTED // 상장
+  SUSPENDED // 거래 정지
+  DELISTED // 상장 폐지
 }
 
 model User {
@@ -42,13 +57,13 @@ model User {
   role      Role     @default(USER)
   createdAt DateTime @default(now()) @map("created_at")
 
-  account       Account[]
-  refreshTokens refreshToken[]
+  accounts      Account[]
+  refreshTokens RefreshToken[]
 
   @@map("users")
 }
 
-model refreshToken {
+model RefreshToken {
   id          Int    @id @default(autoincrement())
   userId      Int    @map("user_id")
   hashedToken String @map("hashed_token")
@@ -58,21 +73,23 @@ model refreshToken {
   @@map("refresh_tokens")
 }
 
+// 일반 계좌
 model Account {
-  id            Int      @id @default(autoincrement())
-  userId        Int      @map("user_id")
-  accountNumber Int      @unique @map("account_number")
-  money         BigInt   @db.UnsignedBigInt
-  canMoney      BigInt   @map("can_money") @db.UnsignedBigInt
-  createdAt     DateTime @default(now()) @map("created_at")
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  accountNumber    Int      @unique @map("account_number")
+  balance          BigInt   @db.UnsignedBigInt
+  availableBalance BigInt   @map("available_balance") @db.UnsignedBigInt
+  createdAt        DateTime @default(now()) @map("created_at")
 
-  userStocks UserStock[] @relation("UserStocksToAccounts")
-  order      Order[]
   user       User        @relation(fields: [userId], references: [id])
+  userStocks UserStock[]
+  orders     Order[]
 
   @@map("accounts")
 }
 
+// 주식 정보
 model Stock {
   id        Int         @id @default(autoincrement())
   name      String      @unique @db.VarChar(30)
@@ -81,14 +98,15 @@ model Stock {
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime?   @updatedAt @map("updated_at")
 
-  userStocks   UserStock[]    @relation("UserStocksToStocks")
-  order        Order[]
-  orderMatch   OrderMatch[]
-  stockHistory StockHistory[]
+  userStocks     UserStock[]
+  orders         Order[]
+  trades         Trade[]
+  stockHistories StockHistory[]
 
   @@map("stocks")
 }
 
+// 주식 일별 히스토리
 model StockHistory {
   stockId    Int      @map("stock_id")
   date       DateTime @db.Date
@@ -105,53 +123,73 @@ model StockHistory {
   @@map("stock_histories")
 }
 
+// 주식 계좌(보유 종목) 정보
 model UserStock {
-  accountId      Int    @map("account_id")
-  stockId        Int    @map("stock_id")
-  number         BigInt @db.UnsignedBigInt
-  canNumber      BigInt @map("can_number") @db.UnsignedBigInt
-  average        BigInt @db.UnsignedBigInt
-  totalBuyAmount BigInt @map("total_buy_amount") @db.UnsignedBigInt
+  accountId         Int    @map("account_id")
+  stockId           Int    @map("stock_id")
+  quantity          BigInt @db.UnsignedBigInt
+  availableQuantity BigInt @map("available_quantity") @db.UnsignedBigInt
+  average           BigInt @db.UnsignedBigInt
+  totalBuyAmount    BigInt @map("total_buy_amount") @db.UnsignedBigInt
 
-  accounts Account @relation("UserStocksToAccounts", fields: [accountId], references: [id])
-  stocks   Stock   @relation("UserStocksToStocks", fields: [stockId], references: [id])
+  account Account @relation(fields: [accountId], references: [id])
+  stock   Stock   @relation(fields: [stockId], references: [id])
 
   @@id([accountId, stockId])
   @@map("user_stocks")
 }
 
+// 주문
 model Order {
-  id          Int          @id @default(autoincrement())
-  accountId   Int          @map("account_id")
-  stockId     Int          @map("stock_id")
-  price       BigInt       @db.UnsignedBigInt
-  number      BigInt       @db.UnsignedBigInt
-  matchNumber BigInt       @map("match_number") @db.UnsignedBigInt
-  orderType   OrderType    @map("order_type")
-  status      OrderStatus? @default(n)
-  tradingType TradingType  @map("trading_type")
-  createdAt   DateTime     @default(now()) @map("created_at")
+  id             BigInt             @id @default(autoincrement())
+  accountId      Int                @map("account_id")
+  stockId        Int                @map("stock_id")
+  price          BigInt             @db.UnsignedBigInt
+  quantity       BigInt             @db.UnsignedBigInt
+  filledQuantity BigInt             @map("filled_quantity") @db.UnsignedBigInt
+  orderType      OrderType          @map("order_type")
+  status         OrderStatus        @default(RECEIVED)
+  rejectReason   OrderRejectReason? @map("reject_reason") // status=REJECTED일 때만
+  tradingType    TradingType        @map("trading_type")
+  createdAt      DateTime           @default(now()) @map("created_at")
 
-  orderMatchA OrderMatch[] @relation("OrderAsInitial")
-  orderMatchB OrderMatch[] @relation("OrderAsMatched")
+  account Account @relation(fields: [accountId], references: [id])
+  stock   Stock   @relation(fields: [stockId], references: [id])
 
-  accounts Account @relation(fields: [accountId], references: [id])
-  stocks   Stock   @relation(fields: [stockId], references: [id])
+  tradesAsMaker Trade[] @relation("TradeMaker")
+  tradesAsTaker Trade[] @relation("TradeTaker")
 
   @@map("orders")
 }
 
-model OrderMatch {
-  id             Int      @id @default(autoincrement())
-  stockId        Int      @map("stock_id")
-  number         BigInt   @db.UnsignedBigInt
-  initialOrderId Int      @map("initial_order_id")
-  orderId        Int      @map("order_id")
-  matchedAt      DateTime @default(now()) @map("matched_at")
+// 체결 내역
+model Trade {
+  id           BigInt   @id @default(autoincrement())
+  stockId      Int      @map("stock_id")
+  price        BigInt   @db.UnsignedBigInt // 체결가
+  quantity     BigInt   @db.UnsignedBigInt
+  makerOrderId BigInt   @map("maker_order_id") // 기존에 존재한 주문
+  takerOrderId BigInt   @map("taker_order_id") // 체결을 발생시킨 주문
+  matchedAt    DateTime @default(now()) @map("matched_at")
 
-  stocks Stock @relation(fields: [stockId], references: [id])
-  orderA Order @relation("OrderAsInitial", fields: [initialOrderId], references: [id])
-  orderB Order @relation("OrderAsMatched", fields: [orderId], references: [id])
+  stock      Stock @relation(fields: [stockId], references: [id])
+  makerOrder Order @relation("TradeMaker", fields: [makerOrderId], references: [id])
+  takerOrder Order @relation("TradeTaker", fields: [takerOrderId], references: [id])
 
-  @@map("order_matches")
+  @@map("trades")
+}
+
+// 엔진 상태 스냅샷
+model Snapshot {
+  id        BigInt   @id @default(autoincrement())
+  state     Bytes    @map("state") @db.LongBlob // 직렬화된 엔진 전체 상태
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("snapshots")
+}
+
+// 커서
+model Cursor {
+  type  CursorType @id
+  index BigInt
 }
