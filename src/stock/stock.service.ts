@@ -4,7 +4,7 @@ import { StockException } from './error/stock.exception';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { StockDto } from './dto/stock.dto';
 import { PrismaClient } from '@prisma/client';
-import { StockLimitService } from './order/services/stock-limit.service';
+import { StockLimitService } from 'src/order/services/stock-limit.service';
 import { StockStatusDto } from './dto/stock-status.dto';
 
 @Injectable()

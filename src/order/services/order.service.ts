@@ -123,7 +123,7 @@ export class OrderService {
             data.lockedBalance = data.number * Number(todayHistory.upperLimit);
         }
 
-        // 매수 가능 예수금 잠금 로직
+        // 매수 가능 예수금 잠금
         const rs = await this.prismaService.$executeRaw`
             UPDATE accounts
             SET can_money = can_money - ${data.lockedBalance}

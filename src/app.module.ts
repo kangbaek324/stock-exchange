@@ -3,6 +3,7 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { StockModule } from './stock/stock.module';
+import { OrderModule } from './order/order.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { AccountModule } from './account/account.module';
@@ -30,6 +31,7 @@ import { ConfigService } from '@nestjs/config';
         AuthModule,
         PrismaModule,
         StockModule,
+        OrderModule,
         WebsocketModule,
         AccountModule,
     ],

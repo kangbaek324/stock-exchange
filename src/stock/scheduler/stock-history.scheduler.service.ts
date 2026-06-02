@@ -5,7 +5,7 @@ import Redis from 'ioredis';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { StockException } from 'src/stock/error/stock.exception';
-import { StockLimitService } from 'src/stock/order/services/stock-limit.service';
+import { StockLimitService } from 'src/order/services/stock-limit.service';
 
 // @TODO Redis 판영 필요
 @Injectable()
