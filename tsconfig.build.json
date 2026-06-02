@@ -5,8 +5,8 @@
     "test",
     "dist",
     "**/*spec.ts",
-    "src/account",
-    "src/stock",
-    "src/websocket"
+    "src/modules/account",
+    "src/modules/stock",
+    "src/modules/websocket"
   ]
 }

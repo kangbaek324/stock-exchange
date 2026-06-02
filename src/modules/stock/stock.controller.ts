@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { StockService } from './stock.service';
 import { StockDto } from './dto/stock.dto';
-import { AdminGuard } from 'src/auth/guard/admin.guard';
+import { AdminGuard } from 'src/modules/auth/guard/admin.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { StockStatusDto } from './dto/stock-status.dto';
-import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guard/jwt-auth.guard';
 
 @Controller('stocks')
 export class StockController {

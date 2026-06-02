@@ -13,7 +13,7 @@ import { GetOrderDto } from '../dto/get-order.dto';
 import { User } from '@prisma/client';
 import { CancelDto } from '../dto/cancel.dto';
 import { EditDto } from '../dto/edit.dto';
-import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guard/jwt-auth.guard';
 import { OrderService } from '../services/order.service';
 
 @Controller('orders')

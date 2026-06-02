@@ -1,7 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import { ExceptionResponse } from 'src/common/error/exception-response.type';
-import { CustomSocket } from 'src/websocket/interface/custom-socket.interface';
+import { CustomSocket } from 'src/modules/websocket/interface/custom-socket.interface';
 
 @Catch(WsException)
 export class WsExceptionFilter implements ExceptionFilter {

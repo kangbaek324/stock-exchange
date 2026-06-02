@@ -21,8 +21,8 @@
   "exclude": [
     "node_modules",
     "dist",
-    "src/account",
-    "src/stock",
-    "src/websocket"
+    "src/modules/account",
+    "src/modules/stock",
+    "src/modules/websocket"
   ]
 }

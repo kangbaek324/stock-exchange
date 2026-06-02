@@ -7,8 +7,8 @@ import { TransferAccountBalanceDto } from './dto/transfer-account-balance.dto';
 import { DepositAccountBalanceDto } from './dto/deposit-account-balance.dto copy';
 import { WithdrawStockDto } from './dto/withdraw-stock.dto';
 import { DepositStockDto } from './dto/deposit-stock.dto';
-import { OrderException } from 'src/order/error/order.exception';
-import { StockException } from 'src/stock/error/stock.exception';
+import { OrderException } from 'src/modules/order/error/order.exception';
+import { StockException } from 'src/modules/stock/error/stock.exception';
 
 @Injectable()
 export class AccountService {

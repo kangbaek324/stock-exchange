@@ -3,7 +3,7 @@ import { STOCK_LIMIT } from 'src/common/consants/stock.constants';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { OrderException } from '../error/order.exception';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
-import { StockException } from 'src/stock/error/stock.exception';
+import { StockException } from 'src/modules/stock/error/stock.exception';
 
 @Injectable()
 export class StockLimitService {

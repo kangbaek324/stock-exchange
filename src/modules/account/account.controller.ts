@@ -10,13 +10,13 @@ import {
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { AccountService } from './account.service';
 import { User } from '@prisma/client';
-import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guard/jwt-auth.guard';
 import { withDrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
 import { DepositStockDto } from './dto/deposit-stock.dto';
 import { TransferAccountBalanceDto } from './dto/transfer-account-balance.dto';
 import { DepositAccountBalanceDto } from './dto/deposit-account-balance.dto copy';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { AdminGuard } from 'src/auth/guard/admin.guard';
+import { AdminGuard } from 'src/modules/auth/guard/admin.guard';
 
 @Controller('accounts')
 @UseGuards(JwtAuthGuard)

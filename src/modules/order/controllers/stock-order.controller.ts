@@ -3,7 +3,7 @@ import { BuyDto } from '../dto/buy.dto';
 import { SellDto } from '../dto/sell.dto';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { User } from '@prisma/client';
-import { JwtAuthGuard } from 'src/auth/guard/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guard/jwt-auth.guard';
 import { OrderService } from '../services/order.service';
 
 @Controller('stocks/:id/orders')

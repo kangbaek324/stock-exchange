@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { OrderStatus, OrderType, StockStatus, User } from '@prisma/client';
-import { AccountException } from 'src/account/error/account.exception';
+import { AccountException } from 'src/modules/account/error/account.exception';
 import { OrderException } from '../error/order.exception';
-import { StockException } from 'src/stock/error/stock.exception';
+import { StockException } from 'src/modules/stock/error/stock.exception';
 import { GetOrderDto } from '../dto/get-order.dto';
 import { OrderCommand } from '../type/order-command.type';
 import { StockLimitService } from './stock-limit.service';

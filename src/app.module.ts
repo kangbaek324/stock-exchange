@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module } from '@nestjs/common';
-import { AuthModule } from './auth/auth.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { PrismaModule } from './common/prisma/prisma.module';
-import { OrderModule } from './order/order.module';
+import { OrderModule } from './modules/order/order.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { AppController } from './app.controller';
