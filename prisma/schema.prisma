@@ -103,18 +103,20 @@ model Account {
 
 // 주식 정보
 model Stock {
-  id        Int         @id @default(autoincrement())
-  name      String      @unique @db.VarChar(30)
-  price     BigInt      @db.UnsignedBigInt
-  status    StockStatus @default(LISTED)
-  createdAt DateTime    @default(now()) @map("created_at")
-  updatedAt DateTime?   @updatedAt @map("updated_at")
+  id          Int         @id @default(autoincrement())
+  name        String      @unique @db.VarChar(30)
+  price       BigInt      @db.UnsignedBigInt
+  status      StockStatus @default(PENDING)
+  publishedAt DateTime?   @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime?   @updatedAt @map("updated_at")
 
   userStocks     UserStock[]
   orders         Order[]
   trades         Trade[]
   stockHistories StockHistory[]
 
+  @@index([publishedAt]) // 릴레이가 미발행 주식 스캔
   @@map("stocks")
 }
 

@@ -1,13 +1,19 @@
 import { Module } from '@nestjs/common';
 import { StockService } from './stock.service';
 import { StockController } from './stock.controller';
-import { ChartModule } from './chart/chart.module';
+// import { ChartModule } from './chart/chart.module';
 import { StockLimitService } from 'src/modules/order/services/stock-limit.service';
-import { StockHistorySchedulerService } from './scheduler/stock-history.scheduler.service';
+// import { StockHistorySchedulerService } from './scheduler/stock-history.scheduler.service';
+import { StockPublishRelay } from './stock-publish.relay';
 
 @Module({
-    imports: [ChartModule],
+    // imports: [ChartModule],
     controllers: [StockController],
-    providers: [StockService, StockLimitService, StockHistorySchedulerService],
+    providers: [
+        StockService,
+        StockLimitService,
+        // StockHistorySchedulerService,
+        StockPublishRelay,
+    ],
 })
 export class StockModule {}

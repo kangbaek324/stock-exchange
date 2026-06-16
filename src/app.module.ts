@@ -3,6 +3,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { OrderModule } from './modules/order/order.module';
 import { AccountModule } from './modules/account/account.module';
+import { StockModule } from './modules/stock/stock.module';
 import { MessagingModule } from './common/messaging/messaging.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
@@ -32,8 +33,7 @@ import { ConfigService } from '@nestjs/config';
         PrismaModule,
         OrderModule,
         AccountModule,
-        // TODO: 마이그레이션 후 복구
-        // StockModule,
+        StockModule,
         // WebsocketModule,
     ],
 })

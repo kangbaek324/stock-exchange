@@ -1,75 +1,48 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Prisma, StockStatus } from '@prisma/client';
+import { ClientProxy } from '@nestjs/microservices';
+import { lastValueFrom, retry, timer } from 'rxjs';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { StockException } from './error/stock.exception';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { StockDto } from './dto/stock.dto';
-import { PrismaClient } from '@prisma/client';
 import { StockLimitService } from 'src/modules/order/services/stock-limit.service';
-import { StockStatusDto } from './dto/stock-status.dto';
+import { StockMessage } from './type/stock-message.type';
+import { ADMIN_SERVICE } from 'src/common/messaging/messaging.module';
+
+// stock.listed 발행에 필요한 필드
+const STOCK_MESSAGE_SELECT = {
+    id: true,
+    price: true,
+    status: true,
+} satisfies Prisma.StockSelect;
+
+type PublishableStock = Prisma.StockGetPayload<{
+    select: typeof STOCK_MESSAGE_SELECT;
+}>;
+
+const PUBLISH_RETRY = {
+    count: 3,
+    delay: (_err: unknown, n: number) => timer(100 * 2 ** n),
+};
 
 @Injectable()
 export class StockService {
+    private readonly logger = new Logger(StockService.name);
+
     constructor(
+        @Inject(ADMIN_SERVICE) private client: ClientProxy,
         private readonly prismaService: PrismaService,
         private readonly stockLimitService: StockLimitService,
     ) {}
 
-    // @TODO 현재 높은 동락률 순으로 제공 옵션 추가 필요
-    async getStockList() {
-        const stocks = await this.prismaService.stock.findMany({
-            include: {
-                stockHistory: { where: { date: getKstDate(-1) } },
-            },
-        });
-
-        const result = await Promise.all(
-            stocks.map(async (stock) => {
-                let beforeClose = Number(stock.stockHistory[0]?.close);
-                if (!beforeClose) {
-                    const stockHistoryToday =
-                        await this.prismaService.stockHistory.findUnique({
-                            where: {
-                                stockId_date: {
-                                    date: getKstDate(0),
-                                    stockId: stock.id,
-                                },
-                            },
-                        });
-
-                    beforeClose = Number(stockHistoryToday.open);
-                }
-
-                return {
-                    id: stock.id,
-                    name: stock.name,
-                    price: stock.price.toString(),
-                    per: (
-                        ((Number(stock.price) - beforeClose) / beforeClose) *
-                        100
-                    ).toFixed(2),
-                };
-            }),
-        );
-
-        return result.sort((a, b) => Number(b.per) - Number(a.per));
-    }
-
-    async getStockInfo(stockId: number) {
-        let stock = await this.prismaService.stock.findUnique({
-            where: {
-                id: stockId,
-            },
-        });
-
-        if (!stock) {
-            throw new StockException('STOCK_NOT_FOUND');
-        }
-
-        return { ...stock, price: stock.price.toString() };
-    }
-
+    // 주식 상장
+    // 1. DB 주식 생성 (status: PENDING)
+    // 2. MQ 발행 시도
+    //  2-1. 성공시 -> (publishedAt) 마킹
+    //  2-2. 실패시 -> (status: PENDING) 유지 및 별도 릴레이가 발행시도
     async createStock(dto: StockDto) {
-        await this.prismaService.$transaction(async (tx: PrismaClient) => {
+        const stock = await this.prismaService.$transaction(async (tx) => {
             const isExist = await tx.stock.findUnique({
                 where: { name: dto.name },
                 select: { id: true },
@@ -77,18 +50,19 @@ export class StockService {
 
             if (isExist) throw new StockException('STOCK_ALREADY_EXIST');
 
-            const stock = await tx.stock.create({
+            const created = await tx.stock.create({
                 data: {
                     name: dto.name,
                     price: dto.listingPrice,
                 },
+                select: STOCK_MESSAGE_SELECT,
             });
 
             const limits = this.stockLimitService.getStockLimit(dto.listingPrice);
 
             await tx.stockHistory.create({
                 data: {
-                    stockId: stock.id,
+                    stockId: created.id,
                     open: dto.listingPrice,
                     high: dto.listingPrice,
                     low: dto.listingPrice,
@@ -98,26 +72,62 @@ export class StockService {
                     upperLimit: limits.upperLimit,
                 },
             });
+
+            return created;
+        });
+
+        await this.publishAndMark(stock);
+    }
+
+    // MQ에 stock.listed 발행 후 성공시 마킹
+    private async publishAndMark(stock: PublishableStock) {
+        try {
+            await lastValueFrom(
+                this.client
+                    .emit('stock.listed', this.toMessage(stock))
+                    .pipe(retry(PUBLISH_RETRY)),
+            );
+        } catch (err) {
+            this.logger.warn(
+                `stock.listed 발행 실패 (stockId=${stock.id})`,
+                err instanceof Error ? err.stack : err,
+            );
+            return;
+        }
+
+        await this.prismaService.stock.update({
+            where: { id: stock.id },
+            data: { publishedAt: new Date() },
         });
     }
 
-    async updateStockStatus(dto: StockStatusDto, stockId: number) {
-        const isExistStock = await this.prismaService.stock.findUnique({
-            where: { id: stockId },
-            select: { id: true },
-        });
-        if (!isExistStock) throw new StockException('STOCK_NOT_FOUND');
-
-        const stock = await this.prismaService.stock.update({
-            where: { id: stockId },
-            data: {
-                status: dto.status,
+    // 릴레이용: 아직 큐 적재 안 된(PENDING·publishedAt=null) 주식을 재발행
+    async republishPending() {
+        const pending = await this.prismaService.stock.findMany({
+            where: {
+                publishedAt: null,
+                status: StockStatus.PENDING,
+                createdAt: { lt: new Date(Date.now() - 2000) },
             },
+            select: STOCK_MESSAGE_SELECT,
+            take: 100,
+            orderBy: { id: 'asc' },
         });
 
+        for (const stock of pending) {
+            await this.publishAndMark(stock);
+        }
+    }
+
+    private toMessage(stock: PublishableStock): StockMessage {
         return {
-            ...stock,
+            id: stock.id,
             price: stock.price.toString(),
+            status: stock.status,
         };
     }
+
+    // async getStockList() { ... }
+    // async getStockInfo(stockId: number) { ... }
+    // async updateStockStatus(dto: StockStatusDto, stockId: number) { ... }
 }
