@@ -20,8 +20,7 @@ enum TradingType {
 }
 
 enum CursorType {
-  DB
-  MQ
+  EVENT
 }
 
 enum OrderStatus {
@@ -34,6 +33,7 @@ enum OrderStatus {
 }
 
 enum OrderRejectReason {
+  INVALID_ORDER // 잘못된 주문
   INSUFFICIENT_BALANCE // 예수금 부족
   INSUFFICIENT_STOCK // 보유 수량 부족
   PRICE_OUT_OF_LIMIT // 상/하한가 벗어남
@@ -47,9 +47,15 @@ enum Role {
 }
 
 enum StockStatus {
+  PENDING // 상장 전
   LISTED // 상장
   SUSPENDED // 거래 정지
   DELISTED // 상장 폐지
+}
+
+enum AccountStatus {
+  PENDING // 대기
+  ACTIVE // 활성
 }
 
 model User {
@@ -78,17 +84,20 @@ model RefreshToken {
 
 // 일반 계좌
 model Account {
-  id               Int      @id @default(autoincrement())
-  userId           Int      @map("user_id")
-  accountNumber    Int      @unique @map("account_number")
-  balance          BigInt   @db.UnsignedBigInt
-  availableBalance BigInt   @map("available_balance") @db.UnsignedBigInt
-  createdAt        DateTime @default(now()) @map("created_at")
+  id               Int           @id @default(autoincrement())
+  userId           Int           @map("user_id")
+  accountNumber    Int           @unique @map("account_number")
+  balance          BigInt        @db.UnsignedBigInt
+  availableBalance BigInt        @map("available_balance") @db.UnsignedBigInt
+  status           AccountStatus @default(PENDING)
+  publishedAt      DateTime?     @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
+  createdAt        DateTime      @default(now()) @map("created_at")
 
   user       User        @relation(fields: [userId], references: [id])
   userStocks UserStock[]
   orders     Order[]
 
+  @@index([publishedAt]) // 릴레이가 미발행 계좌 스캔
   @@map("accounts")
 }
 
@@ -190,9 +199,10 @@ model Trade {
 
 // 엔진 상태 스냅샷
 model Snapshot {
-  id        BigInt   @id @default(autoincrement())
-  state     Bytes    @map("state") @db.LongBlob // 직렬화된 엔진 전체 상태
-  createdAt DateTime @default(now()) @map("created_at")
+  id            BigInt   @id @default(autoincrement())
+  state         Bytes    @map("state") @db.LongBlob // 직렬화된 엔진 전체 상태
+  inputWalIndex BigInt   @map("input_wal_index") @db.UnsignedBigInt
+  createdAt     DateTime @default(now()) @map("created_at")
 
   @@map("snapshots")
 }
@@ -201,4 +211,6 @@ model Snapshot {
 model Cursor {
   type  CursorType @id
   index BigInt
+
+  @@map("cursors")
 }

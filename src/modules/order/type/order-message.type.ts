@@ -8,6 +8,7 @@ export type OrderMessage = {
     stockId: number;
     price: string;
     quantity: string;
+    filledQuantity: string;
     orderType: OrderType;
     tradingType: TradingType;
 };

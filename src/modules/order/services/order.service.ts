@@ -7,6 +7,7 @@ import { OrderValidationService, TargetOrder } from './order-validation.service'
 import { OrderCommand } from '../type/order-command.type';
 import { OrderMessage } from '../type/order-message.type';
 import { GetOrderDto } from '../dto/get-order.dto';
+import { DATA_SERVICE } from 'src/common/messaging/messaging.module';
 
 // 주문 생성 필드
 const ORDER_MESSAGE_SELECT = {
@@ -16,6 +17,7 @@ const ORDER_MESSAGE_SELECT = {
     stockId: true,
     price: true,
     quantity: true,
+    filledQuantity: true,
     orderType: true,
     tradingType: true,
 } satisfies Prisma.OrderSelect;
@@ -32,7 +34,7 @@ const PUBLISH_RETRY = {
  *
  * 1. DB 주문생성 (Status: RECEIVED)
  * 2. MQ 발행 시도
- *  2-1. 성공시 -> (Status: OPEN)
+ *  2-1. 성공시 -> (Publish At 마킹)
  *  2-2. 실패시 -> (Status: RECEIVED) 유지 및 별도 릴레이가 발행시도
  */
 @Injectable()
@@ -40,7 +42,7 @@ export class OrderService {
     private readonly logger = new Logger(OrderService.name);
 
     constructor(
-        @Inject('ORDER_SERVICE') private client: ClientProxy,
+        @Inject(DATA_SERVICE) private client: ClientProxy,
         private readonly prismaService: PrismaService,
         private readonly orderValidation: OrderValidationService,
     ) {}
@@ -131,10 +133,10 @@ export class OrderService {
             return;
         }
 
-        // 발행 성공시 status=OPEN + publishedAt로 업데이트
+        // 발행 성공 마킹 (status 변경은 엔진이 처리)
         await this.prismaService.order.update({
             where: { id: order.id },
-            data: { status: OrderStatus.OPEN, publishedAt: new Date() },
+            data: { publishedAt: new Date() },
         });
     }
 
@@ -168,6 +170,7 @@ export class OrderService {
             stockId: order.stockId,
             price: order.price.toString(),
             quantity: order.quantity.toString(),
+            filledQuantity: order.filledQuantity.toString(),
             orderType: order.orderType,
             tradingType: order.tradingType,
         };

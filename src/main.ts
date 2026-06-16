@@ -46,7 +46,7 @@ async function bootstrap() {
         transport: Transport.RMQ,
         options: {
             urls: [configService.get<string>('RABBITMQ_URL')],
-            queue: 'order_event_queue',
+            queue: 'event_queue',
             queueOptions: {
                 durable: true,
             },

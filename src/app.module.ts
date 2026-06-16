@@ -2,6 +2,8 @@ import { MiddlewareConsumer, Module } from '@nestjs/common';
 import { AuthModule } from './modules/auth/auth.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { OrderModule } from './modules/order/order.module';
+import { AccountModule } from './modules/account/account.module';
+import { MessagingModule } from './common/messaging/messaging.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { AppController } from './app.controller';
@@ -25,13 +27,14 @@ import { ConfigService } from '@nestjs/config';
         }),
         ConfigModule.forRoot({ isGlobal: true }),
         ScheduleModule.forRoot(),
+        MessagingModule,
         AuthModule,
         PrismaModule,
         OrderModule,
+        AccountModule,
         // TODO: 마이그레이션 후 복구
         // StockModule,
         // WebsocketModule,
-        // AccountModule,
     ],
 })
 export class AppModule {
