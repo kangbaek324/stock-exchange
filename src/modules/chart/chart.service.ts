@@ -1,7 +1,7 @@
 // import { Injectable } from '@nestjs/common';
 // import { PrismaService } from 'src/common/prisma/prisma.service';
 // import { ChartException } from './error/chart.exception';
-// import { StockException } from '../error/stock.exception';
+// import { StockException } from '../stock/error/stock.exception';
 // import { InjectRedis } from '@nestjs-modules/ioredis';
 // import Redis from 'ioredis';
 

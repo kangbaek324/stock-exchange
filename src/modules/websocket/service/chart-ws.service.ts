@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Server } from 'socket.io';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { CustomSocket } from '../interface/custom-socket.interface';
-import { ChartException } from 'src/modules/stock/chart/error/chart.exception';
+import { ChartException } from 'src/modules/chart/error/chart.exception';
 import { StockException } from 'src/modules/stock/error/stock.exception';
 import Redis from 'ioredis';
 import { InjectRedis } from '@nestjs-modules/ioredis';
