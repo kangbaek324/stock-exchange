@@ -160,7 +160,7 @@ export class StockWsService {
     }
 
     // 프론트에서 계좌 연산을 위한 주식 가격 전송
-    async sendStockPrice(stockId: number, price: number) {
+    async sendStockPrice(stockId: number, price: string) {
         this.server.to(this.stockPriceRoom(stockId)).emit('stockPriceUpdated', price);
     }
 }

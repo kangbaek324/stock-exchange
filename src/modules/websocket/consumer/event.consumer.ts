@@ -8,9 +8,11 @@ import {
     HoldingUpdatedData,
 } from '../type/event.type';
 import { StockWsService } from '../service/stock-ws.service';
+import { AccountWsService } from '../service/account-ws.service';
 
 interface EffectPlan {
     stockInfo: Set<number>; // 주식 정보탭 - 현재가/당일 고저가 등 (stockId)
+    stockPrice: string;
     orderBook: Set<number>; // 호가창탭 (stockId)
     matchedList: Set<number>; // 체결탭 - 종목 전체 체결 테이프 (stockId)
     chart: Set<number>; // 차트탭 (stockId)
@@ -24,7 +26,10 @@ interface EffectPlan {
 export class EventConsumer {
     private readonly logger = new Logger(EventConsumer.name);
 
-    constructor(private readonly stockWsService: StockWsService) {}
+    constructor(
+        private readonly stockWsService: StockWsService,
+        private readonly accountWsService: AccountWsService,
+    ) {}
 
     @EventPattern(EVENT_BATCH_PATTERN)
     async handleEventBatch(@Payload() batch: EventBatch, @Ctx() context: RmqContext) {
@@ -35,6 +40,7 @@ export class EventConsumer {
             // 한 Event 데이터에서 같은 창이 여러번 업데이트 되는것을 방지
             const plan: EffectPlan = {
                 stockInfo: new Set(),
+                stockPrice: null,
                 orderBook: new Set(),
                 matchedList: new Set(),
                 chart: new Set(),
@@ -71,6 +77,8 @@ export class EventConsumer {
                 plan.orderBook.add(stockId);
                 plan.matchedList.add(stockId);
                 plan.chart.add(stockId);
+
+                plan.stockPrice = event.data.price;
 
                 // NOTE: 잔고 관련 부분은 아래 케이스에서 추가됨
 
@@ -141,6 +149,9 @@ export class EventConsumer {
         // 주식 정보 업데이트 (체결시에만 현재가/고저가 변경)
         for (const stockId of plan.stockInfo) {
             this.stockWsService.sendStockInfo(stockId);
+            if (plan.stockPrice != null) {
+                this.stockWsService.sendStockPrice(stockId, plan.stockPrice);
+            }
         }
 
         // 호가창탭 업데이트
@@ -163,9 +174,13 @@ export class EventConsumer {
         // TODO: plan.filledOrders
 
         // 잔고탭 업데이트
-        // TODO: plan.accountBalance
+        for (const [accountId, data] of plan.accountBalance) {
+            this.accountWsService.sendAccountBalance(accountId, data);
+        }
 
         // 보유 잔고탭 업데이트
-        // TODO: plan.holding
+        for (const [, data] of plan.holding) {
+            this.accountWsService.sendHolding(Number(data.accountId), data);
+        }
     }
 }

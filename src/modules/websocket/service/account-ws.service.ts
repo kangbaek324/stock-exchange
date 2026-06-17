@@ -1,102 +1,118 @@
-// import { Injectable } from '@nestjs/common';
-// import { PrismaService } from 'src/common/prisma/prisma.service';
-// import { CustomSocket } from '../interface/custom-socket.interface';
-// import { Account } from '@prisma/client';
-// import { Server } from 'socket.io';
-// import { WebsocketException } from '../error/websocket.exception';
-// import { OrderWsService } from './order-ws.service';
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from 'src/common/prisma/prisma.service';
+import { CustomSocket } from '../interface/custom-socket.interface';
+import { Server } from 'socket.io';
+import { WebsocketException } from '../error/websocket.exception';
+import { AccountBalanceData, HoldingUpdatedData } from '../type/event.type';
 
-// @Injectable()
-// export class AccountWsService {
-//     private server: Server;
-//     constructor(
-//         private readonly prismaService: PrismaService,
-//         private readonly orderWsService: OrderWsService,
-//     ) {}
+@Injectable()
+export class AccountWsService {
+    private server: Server;
+    constructor(private readonly prismaService: PrismaService) {}
 
-//     setServer(server: Server) {
-//         this.server = server;
-//     }
+    setServer(server: Server) {
+        this.server = server;
+    }
 
-//     onLeaveAccountRoom(client: CustomSocket, accountId: number) {
-//         client.leave('accountId_' + accountId);
-//     }
+    private accountRoom(accountId: number) {
+        return `account_${accountId}`;
+    }
 
-//     async onJoinAccountRoom(client: CustomSocket, accountId: number) {
-//         const userId = client.user.userId;
-//         let account: Account;
+    // join / leave
+    async onJoinAccountRoom(client: CustomSocket, accountId?: number) {
+        const userId = client.user.userId;
+        let resolvedAccountId: number;
 
-//         if (accountId) {
-//             account = await this.prismaService.account.findUnique({
-//                 where: { id: accountId },
-//             });
-//         } else {
-//             // AccountNumber 없이 들어온다면 첫번째로 생성한 계좌로 구독
-//             account = await this.prismaService.account.findFirst({
-//                 where: { userId: userId },
-//                 orderBy: { createdAt: 'asc' },
-//             });
-//         }
+        if (accountId) {
+            const account = await this.prismaService.account.findUnique({
+                where: { id: accountId },
+                select: { id: true, userId: true },
+            });
 
-//         if (!account) throw new WebsocketException('ACCOUNT_NOT_FOUND');
-//         if (account.userId != userId) throw new WebsocketException('ACCOUNT_FORBIDDEN');
+            if (!account) throw new WebsocketException('ACCOUNT_NOT_FOUND');
+            if (account.userId !== userId)
+                throw new WebsocketException('ACCOUNT_FORBIDDEN');
+            resolvedAccountId = account.id;
+        } else {
+            // accountId 없이 들어온다면 첫번째로 생성한 계좌로 구독
+            const account = await this.prismaService.account.findFirst({
+                where: { userId },
+                orderBy: { createdAt: 'asc' },
+                select: { id: true },
+            });
 
-//         client.join('accountId_' + account.id);
+            if (!account) throw new WebsocketException('ACCOUNT_NOT_FOUND');
+            resolvedAccountId = account.id;
+        }
 
-//         await this.updateAccount(account.id);
-//         await this.orderWsService.updateOrderInit(account.id);
-//     }
+        client.join(this.accountRoom(resolvedAccountId));
+        await this.sendAccountInit(resolvedAccountId);
+    }
 
-//     // 내 계좌 업데이트 내역 전송
-//     async updateAccount(accountId: number) {
-//         const account = await this.prismaService.account.findUnique({
-//             where: {
-//                 id: accountId,
-//             },
-//             select: {
-//                 id: true,
-//                 accountNumber: true,
-//                 money: true,
-//                 canMoney: true,
-//             },
-//         });
+    onLeaveAccountRoom(client: CustomSocket, accountId: number) {
+        client.leave(this.accountRoom(accountId));
+    }
 
-//         const userStock = await this.prismaService.userStock.findMany({
-//             where: { accountId: accountId },
-//             select: {
-//                 number: true,
-//                 canNumber: true,
-//                 average: true,
-//                 totalBuyAmount: true,
-//                 stocks: {
-//                     select: {
-//                         id: true,
-//                         name: true,
-//                         price: true,
-//                     },
-//                 },
-//             },
-//         });
+    // 초기 데이터 전송 (join 시 전체 계좌 + 보유 종목)
+    private async sendAccountInit(accountId: number) {
+        const account = await this.prismaService.account.findUnique({
+            where: { id: accountId },
+            select: {
+                id: true,
+                accountNumber: true,
+                balance: true,
+                availableBalance: true,
+            },
+        });
 
-//         const data = {
-//             account: {
-//                 ...account,
-//                 money: account.money.toString(),
-//                 canMoney: account.canMoney.toString(),
-//             },
-//             userStock: userStock.map((stock) => ({
-//                 ...stock,
-//                 number: stock.number.toString(),
-//                 canNumber: stock.canNumber.toString(),
-//                 average: stock.average.toString(),
-//                 totalBuyAmount: stock.totalBuyAmount.toString(),
-//                 stocks: {
-//                     ...stock.stocks,
-//                     price: stock.stocks.price.toString(),
-//                 },
-//             })),
-//         };
+        const holdings = await this.prismaService.userStock.findMany({
+            where: { accountId },
+            select: {
+                stockId: true,
+                quantity: true,
+                availableQuantity: true,
+                average: true,
+                totalBuyAmount: true,
+                stock: { select: { id: true, name: true, price: true } },
+            },
+        });
 
-//         this.server.to('accountId_' + accountId).emit('accountUpdated', data);
-//     }
-// }
+        const data = {
+            account: {
+                ...account,
+                balance: account.balance.toString(),
+                availableBalance: account.availableBalance.toString(),
+            },
+            holdings: holdings.map((h) => ({
+                stockId: h.stockId,
+                quantity: h.quantity.toString(),
+                availableQuantity: h.availableQuantity.toString(),
+                average: h.average.toString(),
+                totalBuyAmount: h.totalBuyAmount.toString(),
+                stock: { ...h.stock, price: h.stock.price.toString() },
+            })),
+        };
+
+        this.server.to(this.accountRoom(accountId)).emit('accountInit', data);
+    }
+
+    // 잔고 업데이트 (account.updated / account.activated 이벤트)
+    sendAccountBalance(accountId: number, data: AccountBalanceData) {
+        this.server.to(this.accountRoom(accountId)).emit('accountBalanceUpdated', {
+            id: data.id,
+            balance: data.balance,
+            availableBalance: data.availableBalance,
+        });
+    }
+
+    // 보유 종목 업데이트 (holding.updated 이벤트)
+    sendHolding(accountId: number, data: HoldingUpdatedData) {
+        this.server.to(this.accountRoom(accountId)).emit('holdingUpdated', {
+            stockId: data.stockId,
+            quantity: data.quantity,
+            availableQuantity: data.availableQuantity,
+            average: data.average,
+            totalBuyAmount: data.totalBuyAmount,
+        });
+    }
+}
