@@ -13,6 +13,7 @@ import {
 import { Server } from 'socket.io';
 import { WsGuard } from './guard/ws.guard';
 import { CustomSocket } from './interface/custom-socket.interface';
+import { StockWsService } from './service/stock-ws.service';
 
 @UseGuards(WsGuard)
 @WebSocketGateway(parseInt(process.env.WEBSOCKET_PORT), {
@@ -22,13 +23,13 @@ import { CustomSocket } from './interface/custom-socket.interface';
 export class WebsocketGateway
     implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
-    constructor() {} // private readonly chartWsService: ChartWsService, // private readonly accountWsService: AccountWsService, // private readonly orderWsService: OrderWsService, // private readonly stockWsService: StockWsService,
+    constructor(private readonly stockWsService: StockWsService) {}
 
-    // @WebSocketServer() server: Server;
-    // private logger: Logger = new Logger('websocketGateway');
+    @WebSocketServer() server: Server;
+    private logger: Logger = new Logger('websocketGateway');
 
     afterInit(server: Server) {
-        // this.stockWsService.setServer(server);
+        this.stockWsService.setServer(server);
         // this.orderWsService.setServer(server);
         // this.accountWsService.setServer(server);
         // this.chartWsService.setServer(server);
@@ -36,44 +37,44 @@ export class WebsocketGateway
     }
 
     handleConnection(client: CustomSocket) {
-        // this.logger.log(`Client Connected : ${client.id}`);
+        this.logger.log(`Client Connected : ${client.id}`);
     }
 
     handleDisconnect(client: CustomSocket) {
-        // this.logger.log(`client Disconnected : ${client.id}`);
+        this.logger.log(`client Disconnected : ${client.id}`);
     }
 
-    // @SubscribeMessage('joinStockRoom')
-    // onJoinStockRoom(
-    //     @MessageBody() stockId: number,
-    //     @ConnectedSocket() client: CustomSocket,
-    // ) {
-    //     this.stockWsService.onJoinStockRoom(stockId, client);
-    // }
+    @SubscribeMessage('joinStockRoom')
+    onJoinStockRoom(
+        @MessageBody() stockId: number,
+        @ConnectedSocket() client: CustomSocket,
+    ) {
+        this.stockWsService.onJoinStockRoom(stockId, client);
+    }
 
-    // @SubscribeMessage('joinStockPriceRoom')
-    // handleJoinStockPriceRoom(
-    //     @MessageBody() stockId: number,
-    //     @ConnectedSocket() client: CustomSocket,
-    // ) {
-    //     this.stockWsService.onJoinStockPriceRoom(stockId, client);
-    // }
+    @SubscribeMessage('joinStockPriceRoom')
+    handleJoinStockPriceRoom(
+        @MessageBody() stockId: number,
+        @ConnectedSocket() client: CustomSocket,
+    ) {
+        this.stockWsService.onJoinStockPriceRoom(stockId, client);
+    }
 
-    // @SubscribeMessage('leaveStockRoom')
-    // handleLeaveStockRoom(
-    //     @MessageBody() stockId: number,
-    //     @ConnectedSocket() client: CustomSocket,
-    // ) {
-    //     this.stockWsService.onLeaveStockRoom(stockId, client);
-    // }
+    @SubscribeMessage('leaveStockRoom')
+    handleLeaveStockRoom(
+        @MessageBody() stockId: number,
+        @ConnectedSocket() client: CustomSocket,
+    ) {
+        this.stockWsService.onLeaveStockRoom(stockId, client);
+    }
 
-    // @SubscribeMessage('leaveStockPriceRoom')
-    // handleLeaveStockPriceRoom(
-    //     @MessageBody() stockId: number,
-    //     @ConnectedSocket() client: CustomSocket,
-    // ) {
-    //     this.stockWsService.onLeaveStockPriceRoom(stockId, client);
-    // }
+    @SubscribeMessage('leaveStockPriceRoom')
+    handleLeaveStockPriceRoom(
+        @MessageBody() stockId: number,
+        @ConnectedSocket() client: CustomSocket,
+    ) {
+        this.stockWsService.onLeaveStockPriceRoom(stockId, client);
+    }
 
     // @SubscribeMessage('joinAccountRoom')
     // async handleJoinAccountRoom(
