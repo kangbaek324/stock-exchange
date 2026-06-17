@@ -37,8 +37,7 @@ export class MessagingModule implements OnApplicationBootstrap {
         @Inject(ADMIN_SERVICE) private readonly adminClient: ClientProxy,
     ) {}
 
-    // 부팅 시 미리 연결해 큐를 선언해둠
-    // (producer는 첫 emit까지 lazy 연결이라, 안 하면 컨슈머가 큐 없음 404를 만남)
+    // 부팅 시 미리 연결해 큐를 선언
     async onApplicationBootstrap() {
         await Promise.all([this.dataClient.connect(), this.adminClient.connect()]);
     }

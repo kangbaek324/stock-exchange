@@ -7,6 +7,7 @@ import * as cookieParser from 'cookie-parser';
 import { SuccessResponseInterceptor } from './common/interceptors/success-response.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ConfigService } from '@nestjs/config';
+import { EventBatchDeserializer } from './modules/websocket/serializer/event-batch.deserializer';
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
@@ -52,6 +53,7 @@ async function bootstrap() {
             },
             prefetchCount: 1,
             noAck: false,
+            deserializer: new EventBatchDeserializer(),
         },
     });
 

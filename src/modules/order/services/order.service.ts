@@ -166,8 +166,8 @@ export class OrderService {
         return {
             id: order.id.toString(),
             targetId: order.targetId?.toString() ?? null,
-            accountId: order.accountId,
-            stockId: order.stockId,
+            accountId: order.accountId.toString(),
+            stockId: order.stockId.toString(),
             price: order.price.toString(),
             quantity: order.quantity.toString(),
             filledQuantity: order.filledQuantity.toString(),

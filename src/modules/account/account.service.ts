@@ -67,12 +67,12 @@ export class AccountService {
                 select: { accountNumber: true },
             });
 
-            let amount = 5000000n;
+            let amount = 5000000000000000000n;
             const isExistUserAccount = await this.prismaService.account.findFirst({
                 where: { userId: user.id },
                 select: { id: true },
             });
-            if (isExistUserAccount) amount = 0n;
+            // if (isExistUserAccount) amount = 0n;
 
             return prisma.account.create({
                 data: {
@@ -139,7 +139,7 @@ export class AccountService {
     // BigInt 필드를 string으로 변환해 JSON 직렬화 가능한 메시지로 변환
     private toMessage(account: PublishableAccount): AccountMessage {
         return {
-            id: account.id,
+            id: account.id.toString(),
             balance: account.balance.toString(),
             availableBalance: account.availableBalance.toString(),
         };

@@ -1,5 +1,5 @@
 export type AccountMessage = {
-    id: number;
+    id: string;
     balance: string;
     availableBalance: string;
 };

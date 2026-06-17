@@ -10,7 +10,7 @@ import { StockLimitService } from 'src/modules/order/services/stock-limit.servic
 import { StockMessage } from './type/stock-message.type';
 import { ADMIN_SERVICE } from 'src/common/messaging/messaging.module';
 
-// stock.listed 발행에 필요한 필드
+// stock.list 발행에 필요한 필드
 const STOCK_MESSAGE_SELECT = {
     id: true,
     price: true,
@@ -79,17 +79,17 @@ export class StockService {
         await this.publishAndMark(stock);
     }
 
-    // MQ에 stock.listed 발행 후 성공시 마킹
+    // MQ에 stock.list 발행 후 성공시 마킹
     private async publishAndMark(stock: PublishableStock) {
         try {
             await lastValueFrom(
                 this.client
-                    .emit('stock.listed', this.toMessage(stock))
+                    .emit('stock.list', this.toMessage(stock))
                     .pipe(retry(PUBLISH_RETRY)),
             );
         } catch (err) {
             this.logger.warn(
-                `stock.listed 발행 실패 (stockId=${stock.id})`,
+                `stock.list 발행 실패 (stockId=${stock.id})`,
                 err instanceof Error ? err.stack : err,
             );
             return;
@@ -121,7 +121,7 @@ export class StockService {
 
     private toMessage(stock: PublishableStock): StockMessage {
         return {
-            id: stock.id,
+            id: stock.id.toString(),
             price: stock.price.toString(),
             status: stock.status,
         };
