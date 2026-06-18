@@ -15,6 +15,7 @@ import { WsGuard } from './guard/ws.guard';
 import { CustomSocket } from './interface/custom-socket.interface';
 import { StockWsService } from './service/stock-ws.service';
 import { AccountWsService } from './service/account-ws.service';
+import { OrderWsService } from './service/order-ws.service';
 
 @UseGuards(WsGuard)
 @WebSocketGateway(parseInt(process.env.WEBSOCKET_PORT), {
@@ -27,6 +28,7 @@ export class WebsocketGateway
     constructor(
         private readonly stockWsService: StockWsService,
         private readonly accountWsService: AccountWsService,
+        private readonly orderWsService: OrderWsService,
     ) {}
 
     @WebSocketServer() server: Server;
@@ -35,7 +37,7 @@ export class WebsocketGateway
     afterInit(server: Server) {
         this.stockWsService.setServer(server);
         this.accountWsService.setServer(server);
-        // this.orderWsService.setServer(server);
+        this.orderWsService.setServer(server);
         // this.chartWsService.setServer(server);
     }
 
@@ -84,7 +86,8 @@ export class WebsocketGateway
         @ConnectedSocket() client: CustomSocket,
         @MessageBody() accountId?: number,
     ) {
-        await this.accountWsService.onJoinAccountRoom(client, accountId);
+        const resolvedAccountId = await this.accountWsService.onJoinAccountRoom(client, accountId);
+        await this.orderWsService.sendOrderInit(resolvedAccountId);
     }
 
     // @SubscribeMessage('joinChartRoom')

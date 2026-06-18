@@ -9,6 +9,7 @@ import {
 } from '../type/event.type';
 import { StockWsService } from '../service/stock-ws.service';
 import { AccountWsService } from '../service/account-ws.service';
+import { OrderWsService } from '../service/order-ws.service';
 
 interface EffectPlan {
     stockInfo: Set<number>; // 주식 정보탭 - 현재가/당일 고저가 등 (stockId)
@@ -29,6 +30,7 @@ export class EventConsumer {
     constructor(
         private readonly stockWsService: StockWsService,
         private readonly accountWsService: AccountWsService,
+        private readonly orderWsService: OrderWsService,
     ) {}
 
     @EventPattern(EVENT_BATCH_PATTERN)
@@ -168,10 +170,14 @@ export class EventConsumer {
         // TODO: plan.chart
 
         // 미체결탭 업데이트
-        // TODO: plan.openOrders
+        for (const accountId of plan.openOrders) {
+            this.orderWsService.sendOpenOrders(accountId);
+        }
 
         // 체결탭(계좌별) 업데이트
-        // TODO: plan.filledOrders
+        for (const accountId of plan.filledOrders) {
+            this.orderWsService.sendFilledOrders(accountId);
+        }
 
         // 잔고탭 업데이트
         for (const [accountId, data] of plan.accountBalance) {

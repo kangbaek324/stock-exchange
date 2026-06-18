@@ -1,75 +1,103 @@
-// import { Injectable } from '@nestjs/common';
-// import { Order, OrderStatus } from '@prisma/client';
-// import { Server } from 'socket.io';
-// import { getKstDate } from 'src/common/helpers/get-kst-date';
-// import { PrismaService } from 'src/common/prisma/prisma.service';
+import { Injectable } from '@nestjs/common';
+import { OrderStatus } from '@prisma/client';
+import { Server } from 'socket.io';
+import { getKstDate } from 'src/common/helpers/get-kst-date';
+import { PrismaService } from 'src/common/prisma/prisma.service';
 
-// @Injectable()
-// export class OrderWsService {
-//     private server: Server;
-//     constructor(private readonly prismaService: PrismaService) {}
+@Injectable()
+export class OrderWsService {
+    private server: Server;
+    constructor(private readonly prismaService: PrismaService) {}
 
-//     setServer(server: Server) {
-//         this.server = server;
-//     }
+    setServer(server: Server) {
+        this.server = server;
+    }
 
-//     // 내 주문 업데이트 내역 전송
-//     async updateOrderInit(accountId: number) {
-//         let returnData = {
-//             executionOrder: [],
-//             noExecutionOrder: [],
-//         };
+    private accountRoom(accountId: number) {
+        return `account_${accountId}`;
+    }
 
-//         const todayKST = getKstDate();
+    // 초기 데이터 전송 (join 시 미체결 + 당일 체결)
+    async sendOrderInit(accountId: number) {
+        await Promise.all([
+            this.sendOpenOrders(accountId),
+            this.sendFilledOrders(accountId),
+        ]);
+    }
 
-//         let executionOrder = await this.prismaService.order.findMany({
-//             where: {
-//                 accountId: accountId,
-//                 status: OrderStatus.y,
-//                 createdAt: { gte: todayKST },
-//             },
-//             orderBy: { createdAt: 'desc' },
-//             include: {
-//                 stocks: {
-//                     select: {
-//                         name: true,
-//                     },
-//                 },
-//             },
-//         });
+    // 미체결 주문 전송
+    async sendOpenOrders(accountId: number) {
+        const orders = await this.prismaService.order.findMany({
+            where: { accountId, status: OrderStatus.OPEN },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                stockId: true,
+                price: true,
+                quantity: true,
+                filledQuantity: true,
+                orderType: true,
+                tradingType: true,
+                status: true,
+                createdAt: true,
+                stock: { select: { name: true } },
+            },
+        });
 
-//         let noExecutionOrder = await this.prismaService.order.findMany({
-//             where: { accountId: accountId, status: OrderStatus.n },
-//             orderBy: { createdAt: 'desc' },
-//             include: {
-//                 stocks: {
-//                     select: {
-//                         name: true,
-//                     },
-//                 },
-//             },
-//         });
+        const data = orders.map((o) => ({
+            id: o.id.toString(),
+            stockId: o.stockId,
+            stockName: o.stock.name,
+            price: o.price.toString(),
+            quantity: o.quantity.toString(),
+            filledQuantity: o.filledQuantity.toString(),
+            orderType: o.orderType,
+            tradingType: o.tradingType,
+            status: o.status,
+            createdAt: o.createdAt,
+        }));
 
-//         const toOrderData = (order: (typeof executionOrder)[number]) => ({
-//             id: order.id,
-//             stockName: order.stocks.name,
-//             stockId: order.stockId,
-//             price: order.price.toString(),
-//             number: order.number.toString(),
-//             matchNumber: order.matchNumber.toString(),
-//             status: order.status,
-//             tradingType: order.tradingType,
-//             createdAt: order.createdAt,
-//         });
+        this.server.to(this.accountRoom(accountId)).emit('openOrdersUpdated', data);
+    }
 
-//         returnData.executionOrder = executionOrder.map(toOrderData);
-//         returnData.noExecutionOrder = noExecutionOrder.map(toOrderData);
+    // 당일 체결 내역 전송 (부분 체결 포함)
+    async sendFilledOrders(accountId: number) {
+        const today = getKstDate();
 
-//         this.server.to('accountId_' + accountId).emit('orderInit', returnData);
-//     }
+        const orders = await this.prismaService.order.findMany({
+            where: {
+                accountId,
+                filledQuantity: { gt: 0 },
+                createdAt: { gte: today },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                stockId: true,
+                price: true,
+                quantity: true,
+                filledQuantity: true,
+                orderType: true,
+                tradingType: true,
+                status: true,
+                createdAt: true,
+                stock: { select: { name: true } },
+            },
+        });
 
-//     // 특정 주문 업데이트
-//     async updateOrder(accountId: number, order: Order) {
-//         this.server.to('accountId_' + accountId).emit('orderUpdated', order);
-//     }
-// }
+        const data = orders.map((o) => ({
+            id: o.id.toString(),
+            stockId: o.stockId,
+            stockName: o.stock.name,
+            price: o.price.toString(),
+            quantity: o.quantity.toString(),
+            filledQuantity: o.filledQuantity.toString(),
+            orderType: o.orderType,
+            tradingType: o.tradingType,
+            status: o.status,
+            createdAt: o.createdAt,
+        }));
+
+        this.server.to(this.accountRoom(accountId)).emit('filledOrdersUpdated', data);
+    }
+}

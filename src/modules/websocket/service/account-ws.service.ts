@@ -19,7 +19,7 @@ export class AccountWsService {
     }
 
     // join / leave
-    async onJoinAccountRoom(client: CustomSocket, accountId?: number) {
+    async onJoinAccountRoom(client: CustomSocket, accountId?: number): Promise<number> {
         const userId = client.user.userId;
         let resolvedAccountId: number;
 
@@ -47,6 +47,7 @@ export class AccountWsService {
 
         client.join(this.accountRoom(resolvedAccountId));
         await this.sendAccountInit(resolvedAccountId);
+        return resolvedAccountId;
     }
 
     onLeaveAccountRoom(client: CustomSocket, accountId: number) {
