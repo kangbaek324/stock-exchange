@@ -4,6 +4,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { OrderStatus, OrderType, Prisma, TradingType, User } from '@prisma/client';
 import { lastValueFrom, retry, timer } from 'rxjs';
 import { OrderValidationService, TargetOrder } from './order-validation.service';
+import { StockLimitService } from './stock-limit.service';
 import { OrderCommand } from '../type/order-command.type';
 import { OrderMessage } from '../type/order-message.type';
 import { GetOrderDto } from '../dto/get-order.dto';
@@ -45,6 +46,7 @@ export class OrderService {
         @Inject(DATA_SERVICE) private client: ClientProxy,
         private readonly prismaService: PrismaService,
         private readonly orderValidation: OrderValidationService,
+        private readonly stockLimitService: StockLimitService,
     ) {}
 
     // 주문 생성
@@ -74,8 +76,8 @@ export class OrderService {
                         accountId,
                         stockId: command.stockId,
                         price:
-                            command.dto.orderType === OrderType.MARKET
-                                ? BigInt(20000)
+                            command.dto.orderType === OrderType.MARKET && command.type === 'buy'
+                                ? await this.stockLimitService.getUpperLimit(command.stockId)
                                 : BigInt(command.dto.price),
                         quantity: BigInt(command.dto.quantity),
                         filledQuantity: BigInt(0),

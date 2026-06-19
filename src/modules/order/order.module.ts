@@ -14,5 +14,6 @@ import { OrderPublishRelay } from './services/order-publish.relay';
         StockLimitService,
         OrderPublishRelay,
     ],
+    exports: [StockLimitService],
 })
 export class OrderModule {}

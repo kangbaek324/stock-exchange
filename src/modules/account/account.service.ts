@@ -60,12 +60,12 @@ export class AccountService {
                 select: { accountNumber: true },
             });
 
-            let amount = 1000000000000000n;
+            let amount = 1_000_000_000n;
             const isExistUserAccount = await this.prismaService.account.findFirst({
                 where: { userId: user.id },
                 select: { id: true },
             });
-            // if (isExistUserAccount) amount = 0n;
+            if (isExistUserAccount) amount = 0n;
 
             return prisma.account.create({
                 data: {

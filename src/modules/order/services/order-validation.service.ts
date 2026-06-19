@@ -78,8 +78,7 @@ export class OrderValidationService {
                 }
 
                 if (dto.orderType === OrderType.LIMIT) {
-                    // TODO: 새 테이블 코드로 마이그레션 후 주석 해제
-                    // await this.stockLimitService.limitSizeCheck(stockId, dto.price);
+                    await this.stockLimitService.limitSizeCheck(stockId, dto.price);
                 }
                 return { accountId: account.id, target: null };
             }

@@ -23,10 +23,32 @@ export class StockLimitService {
 
     // CONSIDER: 매번 사용할때 마다 상하한가를 계산하고 있기에, 이를 저장하는 로직이 필요함
     async limitSizeCheck(stockId: number, price: number) {
-        // 오늘 캔들 조회 (인메모리)
-        const todayCandle = this.chartWsService.getCurrentCandle(stockId, '1d');
+        const prevClose = await this.getPrevClose(stockId);
+        if (!prevClose) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
 
-        // 오늘 이전 가장 최근 candle 조회
+        const limits = calcStockLimit(Number(prevClose));
+        if (price > limits.upperLimit || price < limits.lowerLimit) {
+            throw new OrderException('PRICE_OUT_OF_LIMIT');
+        }
+    }
+
+    // NOTE: 래퍼 함수
+    async getUpperLimit(stockId: number): Promise<bigint> {
+        const prevClose = await this.getPrevClose(stockId);
+        if (!prevClose) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
+        return BigInt(calcStockLimit(Number(prevClose)).upperLimit);
+    }
+
+    async getLowerLimit(stockId: number): Promise<bigint> {
+        const prevClose = await this.getPrevClose(stockId);
+        if (!prevClose) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
+        return BigInt(calcStockLimit(Number(prevClose)).lowerLimit);
+    }
+
+    // 전일 종가 반환
+    // NOTE: 상장 당일일 경우 당일 시가를 반환
+    async getPrevClose(stockId: number): Promise<bigint | null> {
+        const todayCandle = this.chartWsService.getCurrentCandle(stockId, '1d');
         const prevDbCandle = await this.prismaService.candle.findFirst({
             where: {
                 stockId,
@@ -37,20 +59,7 @@ export class StockLimitService {
             select: { close: true },
         });
 
-        // 나온 값들로 상하한가 계산
         // 상장 당일이라 이전 캔들이 없으면 오늘 시가(상장가) 기준
-        const prevClose = prevDbCandle?.close ?? todayCandle?.open;
-
-        if (!prevClose) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
-
-        const limits = calcStockLimit(Number(prevClose));
-
-        if (price > limits.upperLimit || price < limits.lowerLimit) {
-            throw new OrderException('PRICE_OUT_OF_LIMIT');
-        }
-    }
-
-    getStockLimit(prevClose: number) {
-        return calcStockLimit(prevClose);
+        return prevDbCandle?.close ?? todayCandle?.open ?? null;
     }
 }

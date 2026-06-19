@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { CandleType } from '@prisma/client';
+import { StockStatus } from '@prisma/client';
 import { CustomSocket } from '../interface/custom-socket.interface';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { Server } from 'socket.io';
-import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { ChartWsService } from './chart-ws.service';
+import { StockLimitService } from 'src/modules/order/services/stock-limit.service';
 import { calcStockLimit } from 'src/common/helpers/stock-limit';
 
 // TODO / CONSIDER: 체결 기록 및 호가창 전송시 매번 SQL 조회를 하는 중
@@ -15,6 +15,7 @@ export class StockWsService {
     constructor(
         private readonly prismaService: PrismaService,
         private readonly chartWsService: ChartWsService,
+        private readonly stockLimitService: StockLimitService,
     ) {}
 
     async setServer(server: Server) {
@@ -31,7 +32,17 @@ export class StockWsService {
     }
 
     // join / leave
-    onJoinStockRoom(stockId: number, client: CustomSocket) {
+    async onJoinStockRoom(stockId: number, client: CustomSocket) {
+        const stock = await this.prismaService.stock.findUnique({
+            where: { id: stockId },
+            select: { status: true },
+        });
+
+        if (!stock || stock.status === StockStatus.PENDING) {
+            client.emit('error', { message: 'STOCK_NOT_TRADABLE' });
+            return;
+        }
+
         client.join(this.stockRoom(stockId));
 
         // 초기 데이터 전송
@@ -54,8 +65,6 @@ export class StockWsService {
 
     // 가격 및 호가창에 대한 정보 전송
     async sendStockInfo(stockId: number) {
-        const yesterday = getKstDate(-1);
-
         const rawStock = await this.prismaService.stock.findUnique({
             where: { id: stockId },
             select: { id: true, name: true, price: true },
@@ -63,30 +72,19 @@ export class StockWsService {
         const stock = { ...rawStock, price: rawStock.price.toString() };
 
         const todayCandle = this.chartWsService.getCurrentCandle(stockId, '1d');
-        const prevCandle = await this.prismaService.candle.findFirst({
-            where: { stockId, type: CandleType.ONE_DAY, candleTime: yesterday },
-            select: { close: true },
-        });
-
-        // NOTE: 오늘 거래가 없으면 currentCandles에 1d 봉이 없음
-        // 이 경우 현재 주식 가격(기준가)을 시가로 사용
-        const open = todayCandle?.open?.toString() ?? stock.price;
-
-        // NOTE: 전날 캔들 정보가 없는 경우는 오늘 신규 상장인 케이스
-        // 전날 캔들 정보가 없기 때문에 오늘 시가 반환
-        const prevClose = prevCandle?.close?.toString() ?? open;
+        const prevCloseRaw = await this.stockLimitService.getPrevClose(stockId);
 
         // 상하한가 계산
-        const limits = calcStockLimit(Number(prevClose));
+        const limits = calcStockLimit(Number(prevCloseRaw));
 
+        const prevClose = prevCloseRaw.toString();
         const data = {
             ...stock,
             prevClose,
-            // NOTE: low, high, close가 없는 경우도 open과 동일한 케이스
-            low: todayCandle?.low.toString() ?? stock.price,
-            high: todayCandle?.high.toString() ?? stock.price,
-            close: todayCandle?.close.toString() ?? stock.price,
-            open,
+            low: todayCandle?.low.toString() ?? prevClose,
+            high: todayCandle?.high.toString() ?? prevClose,
+            close: todayCandle?.close.toString() ?? prevClose,
+            open: todayCandle?.open.toString() ?? prevClose,
             upperLimit: limits.upperLimit.toString(),
             lowerLimit: limits.lowerLimit.toString(),
         };

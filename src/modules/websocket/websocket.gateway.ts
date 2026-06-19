@@ -53,11 +53,11 @@ export class WebsocketGateway
     }
 
     @SubscribeMessage('joinStockRoom')
-    onJoinStockRoom(
+    async onJoinStockRoom(
         @MessageBody() stockId: number,
         @ConnectedSocket() client: CustomSocket,
     ) {
-        this.stockWsService.onJoinStockRoom(stockId, client);
+        await this.stockWsService.onJoinStockRoom(stockId, client);
     }
 
     @SubscribeMessage('joinStockPriceRoom')

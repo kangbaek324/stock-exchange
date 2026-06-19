@@ -6,5 +6,5 @@ export function getKstDate(daysOffset: number = 0) {
         timeZone: 'Asia/Seoul',
     });
 
-    return new Date(kstDateStr + 'T00:00:00.000Z');
+    return new Date(kstDateStr + 'T00:00:00.000+09:00');
 }
