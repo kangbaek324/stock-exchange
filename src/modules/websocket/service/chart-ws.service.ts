@@ -251,34 +251,61 @@ export class ChartWsService implements OnModuleInit {
     }
 
     // 체결시 차트 업데이트
-    onTradeExecuted(stockId: number, price: bigint, quantity: bigint, matchedAt: Date) {
+    async onTradeExecuted(
+        stockId: number,
+        price: bigint,
+        quantity: bigint,
+        matchedAt: Date,
+    ) {
         for (const type of CHART_TYPES) {
             const key = this.key(stockId, type);
             const candleTime = this.getCandleTime(matchedAt, type);
             const existing = this.currentCandles.get(key);
 
             // 현재 캔들 업데이트
-            if (!existing) {
-                // 새 봉 생성
-                this.currentCandles.set(key, {
-                    candleTime,
-                    open: price,
-                    high: price,
-                    low: price,
-                    close: price,
-                    volume: quantity,
+            if (!existing || existing.candleTime.getTime() !== candleTime.getTime()) {
+                // 기존 봉 pending 이전
+                if (existing) {
+                    this.pendingCandles.push({ stockId, type, candle: existing });
+                }
+
+                // 해당 시간대 trades로 봉 복구 (재시작 등으로 메모리 유실된 경우)
+                const prevTrades = await this.prismaService.trade.findMany({
+                    where: { stockId, matchedAt: { gte: candleTime, lt: matchedAt } },
+                    orderBy: { matchedAt: 'asc' },
+                    select: { price: true, quantity: true },
                 });
-            } else if (existing.candleTime.getTime() !== candleTime.getTime()) {
-                // 새 봉 생성 (기존 봉 Pending 이전 후 생성)
-                this.pendingCandles.push({ stockId, type, candle: existing });
-                this.currentCandles.set(key, {
-                    candleTime,
-                    open: price,
-                    high: price,
-                    low: price,
-                    close: price,
-                    volume: quantity,
-                });
+
+                if (prevTrades.length > 0) {
+                    let high = prevTrades[0].price;
+                    let low = prevTrades[0].price;
+                    let volume = 0n;
+                    for (const t of prevTrades) {
+                        if (t.price > high) high = t.price;
+                        if (t.price < low) low = t.price;
+                        volume += t.quantity;
+                    }
+                    if (price > high) high = price;
+                    if (price < low) low = price;
+
+                    this.currentCandles.set(key, {
+                        candleTime,
+                        open: prevTrades[0].price,
+                        high,
+                        low,
+                        close: price,
+                        volume: volume + quantity,
+                    });
+                } else {
+                    this.currentCandles.set(key, {
+                        candleTime,
+                        open: price,
+                        high: price,
+                        low: price,
+                        close: price,
+                        volume: quantity,
+                    });
+                }
             } else {
                 // 기존 봉 업데이트
                 if (price > existing.high) existing.high = price;
@@ -298,6 +325,11 @@ export class ChartWsService implements OnModuleInit {
     // 현재 캔들 조회
     getCurrentCandle(stockId: number, type: ChartType): InMemoryCandle | undefined {
         return this.currentCandles.get(this.key(stockId, type));
+    }
+
+    // 현재 캔들 직접 등록 (외부 복구용)
+    setCurrentCandle(stockId: number, type: ChartType, candle: InMemoryCandle): void {
+        this.currentCandles.set(this.key(stockId, type), candle);
     }
 
     // 상장 시 오늘 1d 봉 초기화 (상하한가 기준가 확보용)

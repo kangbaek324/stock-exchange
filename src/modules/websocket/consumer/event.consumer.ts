@@ -179,7 +179,7 @@ export class EventConsumer {
 
         // 차트탭 업데이트
         for (const trade of plan.trades) {
-            this.chartWsService.onTradeExecuted(
+            await this.chartWsService.onTradeExecuted(
                 Number(trade.stockId),
                 BigInt(trade.price),
                 BigInt(trade.quantity),
