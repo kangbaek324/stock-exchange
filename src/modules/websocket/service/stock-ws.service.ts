@@ -68,8 +68,8 @@ export class StockWsService {
             select: { close: true },
         });
 
-        // NOTE: 오늘 캔들 정보가 없는 경우는 상장 전인 케이스 (혹은 상장은 되었으나 거래 X)
-        // 캔들 정보가 없기 때문에 현재 주식 가격 반환
+        // NOTE: 오늘 거래가 없으면 currentCandles에 1d 봉이 없음
+        // 이 경우 현재 주식 가격(기준가)을 시가로 사용
         const open = todayCandle?.open?.toString() ?? stock.price;
 
         // NOTE: 전날 캔들 정보가 없는 경우는 오늘 신규 상장인 케이스
@@ -154,5 +154,4 @@ export class StockWsService {
     async sendStockPrice(stockId: number, price: string) {
         this.server.to(this.stockPriceRoom(stockId)).emit('stockPriceUpdated', price);
     }
-
 }
