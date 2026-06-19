@@ -6,21 +6,24 @@ import {
     DomainEvent,
     EventBatch,
     HoldingUpdatedData,
+    TradeExecutedData,
 } from '../type/event.type';
 import { StockWsService } from '../service/stock-ws.service';
 import { AccountWsService } from '../service/account-ws.service';
 import { OrderWsService } from '../service/order-ws.service';
+import { ChartWsService } from '../service/chart-ws.service';
 
 interface EffectPlan {
     stockInfo: Set<number>; // 주식 정보탭 - 현재가/당일 고저가 등 (stockId)
     stockPrice: string;
     orderBook: Set<number>; // 호가창탭 (stockId)
     matchedList: Set<number>; // 체결탭 - 종목 전체 체결 테이프 (stockId)
-    chart: Set<number>; // 차트탭 (stockId)
+    trades: TradeExecutedData[]; // 차트탭 - 순서 보장을 위해 배열로 수집 (stockId)
     openOrders: Set<number>; // 미체결탭 (accountId)
     filledOrders: Set<number>; // 체결탭 - 계좌별 체결 내역 (accountId)
     accountBalance: Map<number, AccountBalanceData>; // 잔고탭 (accountId)
     holding: Map<string, HoldingUpdatedData>; // 보유 잔고탭 (accountId:stockId)
+    listedStocks: Map<number, bigint>; // 상장 종목 (stockId → 상장가)
 }
 
 @Controller()
@@ -31,6 +34,7 @@ export class EventConsumer {
         private readonly stockWsService: StockWsService,
         private readonly accountWsService: AccountWsService,
         private readonly orderWsService: OrderWsService,
+        private readonly chartWsService: ChartWsService,
     ) {}
 
     @EventPattern(EVENT_BATCH_PATTERN)
@@ -45,11 +49,12 @@ export class EventConsumer {
                 stockPrice: null,
                 orderBook: new Set(),
                 matchedList: new Set(),
-                chart: new Set(),
+                trades: [],
                 openOrders: new Set(),
                 filledOrders: new Set(),
                 accountBalance: new Map(),
                 holding: new Map(),
+                listedStocks: new Map(),
             };
 
             // Plan 데이터 채우기
@@ -78,7 +83,7 @@ export class EventConsumer {
                 plan.stockInfo.add(stockId);
                 plan.orderBook.add(stockId);
                 plan.matchedList.add(stockId);
-                plan.chart.add(stockId);
+                plan.trades.push(event.data);
 
                 plan.stockPrice = event.data.price;
 
@@ -135,8 +140,14 @@ export class EventConsumer {
 
                 return;
 
-            // ETC
             case 'stock.listed':
+                // TODO: 별론데
+                if (event.data.status === 'LISTED') {
+                    plan.listedStocks.set(
+                        Number(event.data.id),
+                        BigInt(event.data.price),
+                    );
+                }
                 return;
 
             default: {
@@ -167,7 +178,14 @@ export class EventConsumer {
         }
 
         // 차트탭 업데이트
-        // TODO: plan.chart
+        for (const trade of plan.trades) {
+            this.chartWsService.onTradeExecuted(
+                Number(trade.stockId),
+                BigInt(trade.price),
+                BigInt(trade.quantity),
+                new Date(trade.executedAt),
+            );
+        }
 
         // 미체결탭 업데이트
         for (const accountId of plan.openOrders) {
@@ -187,6 +205,11 @@ export class EventConsumer {
         // 보유 잔고탭 업데이트
         for (const [, data] of plan.holding) {
             this.accountWsService.sendHolding(Number(data.accountId), data);
+        }
+
+        // 상장 종목 1d 봉 초기화
+        for (const [stockId, listingPrice] of plan.listedStocks) {
+            this.chartWsService.initListingCandle(stockId, listingPrice);
         }
     }
 }

@@ -1,13 +1,21 @@
 import { Injectable } from '@nestjs/common';
+import { CandleType } from '@prisma/client';
 import { CustomSocket } from '../interface/custom-socket.interface';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { Server } from 'socket.io';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
+import { ChartWsService } from './chart-ws.service';
+import { calcStockLimit } from 'src/common/helpers/stock-limit';
 
+// TODO / CONSIDER: 체결 기록 및 호가창 전송시 매번 SQL 조회를 하는 중
+// 캐싱 도입혹은 별도의 방법으로 DB 사용을 줄이면 좋을것 같음.
 @Injectable()
 export class StockWsService {
     private server: Server;
-    constructor(private readonly prismaService: PrismaService) {}
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly chartWsService: ChartWsService,
+    ) {}
 
     async setServer(server: Server) {
         this.server = server;
@@ -32,67 +40,55 @@ export class StockWsService {
         this.sendMatchedList(stockId);
     }
 
-    onJoinStockPriceRoom(stockId: number, client: CustomSocket) {
-        client.join(this.stockPriceRoom(stockId));
-    }
-
     onLeaveStockRoom(stockId: number, client: CustomSocket) {
         client.leave(this.stockRoom(stockId));
+    }
+
+    onJoinStockPriceRoom(stockId: number, client: CustomSocket) {
+        client.join(this.stockPriceRoom(stockId));
     }
 
     onLeaveStockPriceRoom(stockId: number, client: CustomSocket) {
         client.leave(this.stockPriceRoom(stockId));
     }
 
-    // 주식 가격과 호가창에 대한 정보 전송
+    // 가격 및 호가창에 대한 정보 전송
     async sendStockInfo(stockId: number) {
-        const today = getKstDate();
         const yesterday = getKstDate(-1);
 
-        // 주식 기본 정보 조회
         const rawStock = await this.prismaService.stock.findUnique({
             where: { id: stockId },
             select: { id: true, name: true, price: true },
         });
+        const stock = { ...rawStock, price: rawStock.price.toString() };
 
-        let stock = {
-            ...rawStock,
-            price: rawStock.price.toString(),
-        };
-
-        // 오늘 주식 가격 정보 조회
-        let rawStockHistory = await this.prismaService.stockHistory.findUnique({
-            where: { stockId_date: { stockId: stockId, date: today } },
-        });
-
-        const stockHistory = {
-            low: rawStockHistory?.low.toString() ?? stock.price,
-            high: rawStockHistory?.high.toString() ?? stock.price,
-            close: rawStockHistory?.close.toString() ?? stock.price,
-            open: rawStockHistory?.open?.toString() ?? stock.price,
-            upperLimit: rawStockHistory?.upperLimit.toString(),
-            lowerLimit: rawStockHistory?.lowerLimit.toString(),
-        };
-
-        // 전일 종가 조회
-        const rawPreviousClose = await this.prismaService.stockHistory.findUnique({
-            where: {
-                stockId_date: {
-                    stockId: stockId,
-                    date: yesterday,
-                },
-            },
+        const todayCandle = this.chartWsService.getCurrentCandle(stockId, '1d');
+        const prevCandle = await this.prismaService.candle.findFirst({
+            where: { stockId, type: CandleType.ONE_DAY, candleTime: yesterday },
             select: { close: true },
         });
 
-        // 전일 종가 조회시 만약 존재하지 않는다면
-        // 레코드가 한개 = 오늘 상장이기 때문에 당일 시가를 반환한다.
-        let previousClose = rawPreviousClose?.close.toString() ?? stockHistory.open;
+        // NOTE: 오늘 캔들 정보가 없는 경우는 상장 전인 케이스 (혹은 상장은 되었으나 거래 X)
+        // 캔들 정보가 없기 때문에 현재 주식 가격 반환
+        const open = todayCandle?.open?.toString() ?? stock.price;
 
-        let data = {
+        // NOTE: 전날 캔들 정보가 없는 경우는 오늘 신규 상장인 케이스
+        // 전날 캔들 정보가 없기 때문에 오늘 시가 반환
+        const prevClose = prevCandle?.close?.toString() ?? open;
+
+        // 상하한가 계산
+        const limits = calcStockLimit(Number(prevClose));
+
+        const data = {
             ...stock,
-            previousClose,
-            ...stockHistory,
+            prevClose,
+            // NOTE: low, high, close가 없는 경우도 open과 동일한 케이스
+            low: todayCandle?.low.toString() ?? stock.price,
+            high: todayCandle?.high.toString() ?? stock.price,
+            close: todayCandle?.close.toString() ?? stock.price,
+            open,
+            upperLimit: limits.upperLimit.toString(),
+            lowerLimit: limits.lowerLimit.toString(),
         };
 
         this.server.to(this.stockRoom(stockId)).emit('stockInfoUpdated', data);
@@ -108,7 +104,6 @@ export class StockWsService {
             GROUP BY trading_type, price
             ORDER BY price DESC
             `;
-
         buyOrderbook = buyOrderbook
             .map((row) => ({
                 ...row,
@@ -125,7 +120,6 @@ export class StockWsService {
             GROUP BY trading_type, price
             ORDER BY price ASC
             `;
-
         sellOrderbook = sellOrderbook
             .map((row) => ({
                 ...row,
@@ -134,12 +128,10 @@ export class StockWsService {
             }))
             .slice(0, 10);
 
-        const data = {
-            buyOrderbook,
-            sellOrderbook,
-        };
-
-        this.server.to(this.stockRoom(stockId)).emit('orderBookUpdated', data);
+        // 이벤트 전송
+        this.server
+            .to(this.stockRoom(stockId))
+            .emit('orderBookUpdated', { buyOrderbook, sellOrderbook });
     }
 
     // 체결 기록 전송
@@ -149,7 +141,6 @@ export class StockWsService {
               from trades t where stock_id = ${stockId}
               order by matched_at desc limit 50;
             `;
-
         matchedList = matchedList.map((row) => ({
             ...row,
             price: row.price.toString(),
@@ -163,4 +154,5 @@ export class StockWsService {
     async sendStockPrice(stockId: number, price: string) {
         this.server.to(this.stockPriceRoom(stockId)).emit('stockPriceUpdated', price);
     }
+
 }

@@ -1,214 +1,344 @@
-// import { Injectable } from '@nestjs/common';
-// import { Server } from 'socket.io';
-// import { PrismaService } from 'src/common/prisma/prisma.service';
-// import { CustomSocket } from '../interface/custom-socket.interface';
-// import { ChartException } from 'src/modules/chart/error/chart.exception';
-// import { StockException } from 'src/modules/stock/error/stock.exception';
-// import Redis from 'ioredis';
-// import { InjectRedis } from '@nestjs-modules/ioredis';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Server } from 'socket.io';
+import { PrismaService } from 'src/common/prisma/prisma.service';
+import { ChartType, CHART_TYPES, CANDLE_TYPE } from 'src/modules/chart/type/chart-type';
+import { CustomSocket } from '../interface/custom-socket.interface';
 
-// /**
-//  *  @TODO
-//  *  Redis에 들어가는 숫자값이 모두 String으로 들어가고 있음
-//  *  JSON.parse를 하게되면 원래 숫자값을 알아서 복원해주기때문에 number로 변환해서 넣도록 하는게 좋을것 같음
-//  *  지금 코드에서 UpdfaetChart voulme부분만 숫자로 저장되고 있음
-//  */
-// @Injectable()
-// export class ChartWsService {
-//     constructor(
-//         private readonly prismaService: PrismaService,
-//         @InjectRedis() private readonly redis: Redis,
-//     ) {}
-//     private server: Server;
+export interface InMemoryCandle {
+    candleTime: Date;
+    open: bigint;
+    high: bigint;
+    low: bigint;
+    close: bigint;
+    volume: bigint;
+}
 
-//     setServer(server: Server) {
-//         this.server = server;
-//     }
+export interface PendingCandle {
+    stockId: number;
+    type: ChartType;
+    candle: InMemoryCandle;
+}
 
-//     onJoinChartWsRoom(stockId: number, type: ChartType, client: CustomSocket) {
-//         const stockIdToString = stockId.toString();
-//         client.join(`chart_${stockIdToString}_${type}`);
-//     }
+@Injectable()
+export class ChartWsService implements OnModuleInit {
+    private readonly logger = new Logger(ChartWsService.name);
+    private server: Server;
+    private currentCandles = new Map<string, InMemoryCandle>();
+    private pendingCandles: PendingCandle[] = [];
 
-//     onLeaveChartWsRoom(stockId: number, type: ChartType, client: CustomSocket) {
-//         client.leave(`chart_${stockId.toString()}_${type}`);
-//     }
+    constructor(private readonly prismaService: PrismaService) {}
 
-//     async getCurrentCandle(stockId: number, type: ChartType) {
-//         await this.prismaService.stock
-//             .findUniqueOrThrow({
-//                 where: { id: stockId },
-//             })
-//             .catch(() => {
-//                 throw new StockException('STOCK_NOT_FOUND');
-//             });
+    async onModuleInit() {
+        await this.initializeCandles();
+    }
 
-//         // Redis 데이터 조회
-//         const redisData = await this.redis.lrange(`chart:${stockId}:${type}`, -1, -1);
+    private async initializeCandles() {
+        const stocks = await this.prismaService.stock.findMany({ select: { id: true } });
 
-//         // Redis 데이터가 없는 경우에는 DB조회 후 반환
-//         if (redisData.length === 0) {
-//             let chartData;
+        for (const stock of stocks) {
+            for (const type of CHART_TYPES) {
+                await this.initializeCandleForType(stock.id, type);
+            }
+        }
 
-//             switch (type) {
-//                 case '1m':
-//                 case '5m':
-//                 case '15m':
-//                 case '30m':
-//                 case '60m': {
-//                     const time = type.slice(0, -1);
+        this.logger.log(`캔들 초기화 완료: currentCandles=${this.currentCandles.size}`);
+    }
 
-//                     const chartDataDB: any[] = await this.prismaService.$queryRaw`
-//                                 SELECT
-//                                     DATE_FORMAT(om.matched_at, CONCAT('%Y-%m-%dT%H:', LPAD(FLOOR(MINUTE(om.matched_at) / ${time}) * ${time}, 2, '0'), ':00.000Z')) as time,
-//                                     SUBSTRING_INDEX(GROUP_CONCAT(o.price ORDER BY om.matched_at ASC, om.id ASC), ',', 1) AS open,
-//                                     MAX(o.price) AS high,
-//                                     MIN(o.price) AS low,
-//                                     SUBSTRING_INDEX(GROUP_CONCAT(o.price ORDER BY om.matched_at DESC, om.id DESC), ',', 1) AS close,
-//                                     SUM(om.number) AS volume
-//                                 FROM
-//                                     order_matches om
-//                                 JOIN
-//                                     orders o
-//                                 ON
-//                                     o.id = om.initial_order_id
-//                                 WHERE
-//                                     om.stock_id = ${stockId}
-//                                 GROUP BY time
-//                                 ORDER BY time DESC
-//                                 limit 1;
-//                             `;
+    private async initializeCandleForType(stockId: number, type: ChartType) {
+        const lastCandle = await this.prismaService.candle.findFirst({
+            where: { stockId, type: CANDLE_TYPE[type] },
+            orderBy: { candleTime: 'desc' },
+        });
 
-//                     chartData = chartDataDB.map((data) => ({
-//                         ...data,
-//                         high: data.high.toString(),
-//                         low: data.low.toString(),
-//                         close: data.close.toString(),
-//                         open: data.open.toString(),
-//                         volume: data.volume.toString(),
-//                     }));
+        const now = new Date();
+        const currentCandleTime = this.getCandleTime(now, type);
 
-//                     break;
-//                 }
+        // 마지막 저장 봉이 있으면 그 봉 다음 시간부터, 없으면 전체 조회
+        const fromTime = lastCandle
+            ? new Date(lastCandle.candleTime.getTime() + this.getDurationMs(type))
+            : new Date(0);
 
-//                 case '1d': {
-//                     const chartDataDB: any[] = await this.prismaService.$queryRaw`
-//                                 SELECT
-//                                     DATE_FORMAT(sh.date, '%Y-%m-%dT00:00:00.000Z') AS time,
-//                                     sh.high,
-//                                     sh.low,
-//                                     sh.close,
-//                                     sh.open,
-//                                     COALESCE(SUM(om.number), 0) AS volume
-//                                 FROM stock_histories sh
-//                                 LEFT JOIN order_matches om
-//                                     ON om.stock_id = sh.stock_id
-//                                     AND DATE(om.matched_at) = sh.date
-//                                 WHERE sh.stock_id = ${stockId}
-//                                 GROUP BY sh.date, sh.high, sh.low, sh.close, sh.open
-//                                 ORDER BY sh.date
-//                                 limit 1;
-//                                 `;
+        const trades = await this.prismaService.trade.findMany({
+            where: { stockId, matchedAt: { gte: fromTime } },
+            orderBy: { matchedAt: 'asc' },
+        });
 
-//                     chartData = chartDataDB.map((data) => ({
-//                         ...data,
-//                         high: data.high.toString(),
-//                         low: data.low.toString(),
-//                         close: data.close.toString(),
-//                         open: data.open.toString(),
-//                         volume: data.volume.toString(),
-//                     }));
+        if (trades.length === 0) return;
 
-//                     break;
-//                 }
+        // trades를 캔들 시간대별로 그룹핑
+        const candleMap = new Map<number, InMemoryCandle>();
+        for (const trade of trades) {
+            const ct = this.getCandleTime(trade.matchedAt, type);
+            const timeKey = ct.getTime();
+            const existing = candleMap.get(timeKey);
 
-//                 default:
-//                     throw new ChartException('NOT_SUPPORT_TYPE');
-//             }
+            if (!existing) {
+                candleMap.set(timeKey, {
+                    candleTime: ct,
+                    open: trade.price,
+                    high: trade.price,
+                    low: trade.price,
+                    close: trade.price,
+                    volume: trade.quantity,
+                });
+            } else {
+                if (trade.price > existing.high) existing.high = trade.price;
+                if (trade.price < existing.low) existing.low = trade.price;
+                existing.close = trade.price;
+                existing.volume += trade.quantity;
+            }
+        }
 
-//             if (chartData.length > 0) {
-//                 await this.redis.rpush(
-//                     `chart:${stockId}:${type}`,
-//                     ...chartData.map((d) => JSON.stringify(d)),
-//                 );
-//             }
-//             return chartData;
-//         } else return redisData.map((d) => JSON.parse(d));
-//     }
+        // 현재 진행 중인 봉은 currentCandles, 나머지는 미저장 완성봉으로 바로 DB에 저장
+        const currentTimeKey = currentCandleTime.getTime();
+        for (const [timeKey, candle] of candleMap) {
+            if (timeKey === currentTimeKey) {
+                this.currentCandles.set(this.key(stockId, type), candle);
+            } else {
+                await this.prismaService.candle.upsert({
+                    where: {
+                        stockId_candleTime_type: {
+                            stockId,
+                            candleTime: candle.candleTime,
+                            type: CANDLE_TYPE[type],
+                        },
+                    },
+                    create: {
+                        stockId,
+                        candleTime: candle.candleTime,
+                        type: CANDLE_TYPE[type],
+                        open: candle.open,
+                        high: candle.high,
+                        low: candle.low,
+                        close: candle.close,
+                        volume: candle.volume,
+                    },
+                    update: {
+                        open: candle.open,
+                        high: candle.high,
+                        low: candle.low,
+                        close: candle.close,
+                        volume: candle.volume,
+                    },
+                });
+            }
+        }
+    }
 
-//     getCandleTime(matchedAt: Date, type: ChartType): string {
-//         const d = new Date(matchedAt);
-//         const minutes = d.getUTCMinutes();
+    private getDurationMs(type: ChartType): number {
+        switch (type) {
+            case '1m':
+                return 60_000;
+            case '5m':
+                return 300_000;
+            case '15m':
+                return 900_000;
+            case '30m':
+                return 1_800_000;
+            case '1h':
+                return 3_600_000;
+            case '1d':
+                return 86_400_000;
+        }
+    }
 
-//         switch (type) {
-//             case '1m':
-//                 d.setUTCMinutes(minutes, 0, 0);
-//                 break;
-//             case '5m':
-//                 d.setUTCMinutes(Math.floor(minutes / 5) * 5, 0, 0);
-//                 break;
-//             case '15m':
-//                 d.setUTCMinutes(Math.floor(minutes / 15) * 15, 0, 0);
-//                 break;
-//             case '30m':
-//                 d.setUTCMinutes(Math.floor(minutes / 30) * 30, 0, 0);
-//                 break;
-//             case '60m':
-//                 d.setUTCMinutes(0, 0, 0);
-//                 break;
-//             case '1d':
-//                 d.setUTCHours(0, 0, 0, 0);
-//                 break;
-//         }
+    setServer(server: Server) {
+        this.server = server;
+    }
 
-//         return d.toISOString();
-//     }
+    // util
+    private key(stockId: number, type: ChartType): string {
+        return `${stockId}:${type}`;
+    }
 
-//     // 현재 봉 차트 전송
-//     async updateChart(
-//         stockId: number,
-//         nextPrice: number,
-//         volume: number,
-//         matchedAt: Date,
-//     ) {
-//         const chartmList: ChartType[] = ['1m', '5m', '15m', '30m', '60m', '1d'];
+    private chartRoom(stockId: number, type: ChartType): string {
+        return `chart_${stockId}_${type}`;
+    }
 
-//         // Redis 업데이트
-//         for (const type of chartmList) {
-//             const key = `chart:${stockId}:${type}`;
-//             const lastRaw = await this.redis.lindex(key, -1);
-//             const last = JSON.parse(lastRaw);
+    private serializeCandle(candle: InMemoryCandle) {
+        return {
+            candleTime: candle.candleTime.toISOString(),
+            open: candle.open.toString(),
+            high: candle.high.toString(),
+            low: candle.low.toString(),
+            close: candle.close.toString(),
+            volume: candle.volume.toString(),
+        };
+    }
 
-//             const candleTime = this.getCandleTime(matchedAt, type); // 현재 봉 시작 시간
-//             if (last === null) continue;
-//             // 같은 봉 → 업데이트
-//             if (last.time === candleTime) {
-//                 last.high = Math.max(last.high, nextPrice);
-//                 last.low = Math.min(last.low, nextPrice);
-//                 last.close = nextPrice;
-//                 last.volume = Number(last.volume) + volume;
-//                 await this.redis.lset(key, -1, JSON.stringify(last));
-//             } else {
-//                 // 새 봉 → 추가
-//                 const newCandle = {
-//                     time: candleTime,
-//                     open: nextPrice,
-//                     high: nextPrice,
-//                     low: nextPrice,
-//                     close: nextPrice,
-//                     volume,
-//                 };
-//                 await this.redis.rpush(key, JSON.stringify(newCandle));
-//                 await this.redis.ltrim(key, -500, -1);
-//             }
-//         }
+    // 체결 시각을 해당 봉의 시작 시각으로 내림
+    // 예: 14:53:27 체결, 1분봉이면 14:53:00, 5m봉이면 14:50:00 반환
+    private getCandleTime(matchedAt: Date, type: ChartType): Date {
+        const d = new Date(matchedAt);
+        const minutes = d.getUTCMinutes();
 
-//         await Promise.all(
-//             chartmList.map(async (m) => {
-//                 this.server
-//                     .to(`chart_${stockId.toString()}_${m}`)
-//                     .emit(`chartUpdated_${m}`, await this.getCurrentCandle(stockId, m));
-//             }),
-//         );
-//     }
-// }
+        switch (type) {
+            case '1m':
+                d.setUTCMinutes(minutes, 0, 0);
+                break;
+            case '5m':
+                d.setUTCMinutes(Math.floor(minutes / 5) * 5, 0, 0);
+                break;
+            case '15m':
+                d.setUTCMinutes(Math.floor(minutes / 15) * 15, 0, 0);
+                break;
+            case '30m':
+                d.setUTCMinutes(Math.floor(minutes / 30) * 30, 0, 0);
+                break;
+            case '1h':
+                d.setUTCMinutes(0, 0, 0);
+                break;
+            case '1d': {
+                const kstStr = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+                return new Date(kstStr + 'T00:00:00.000+09:00');
+            }
+        }
+
+        return d;
+    }
+
+    async onJoinChartRoom(
+        stockId: number,
+        type: ChartType,
+        client: CustomSocket,
+        from?: Date,
+    ) {
+        client.join(this.chartRoom(stockId, type));
+
+        // DB에서 from 이후 완성봉 조회
+        const dbCandles = from
+            ? await this.prismaService.candle.findMany({
+                  where: {
+                      stockId,
+                      type: CANDLE_TYPE[type],
+                      candleTime: { gte: from },
+                  },
+                  orderBy: { candleTime: 'asc' },
+              })
+            : [];
+
+        const result = dbCandles.map((c) => ({
+            candleTime: c.candleTime.toISOString(),
+            open: c.open.toString(),
+            high: c.high.toString(),
+            low: c.low.toString(),
+            close: c.close.toString(),
+            volume: c.volume.toString(),
+        }));
+
+        // pendingCandles에서 from 이후 봉 추가
+        for (const { stockId: pStockId, type: pType, candle } of this.pendingCandles) {
+            if (pStockId !== stockId || pType !== type) continue;
+            if (from && candle.candleTime < from) continue;
+
+            result.push(this.serializeCandle(candle));
+        }
+
+        // 현재 진행 중인 봉 추가
+        const current = this.currentCandles.get(this.key(stockId, type));
+        if (current) {
+            result.push(this.serializeCandle(current));
+        }
+
+        // NOTE: pendingCandles 배열의 순서가 어긋난 경우 방지
+        result.sort((a, b) => a.candleTime.localeCompare(b.candleTime));
+
+        client.emit('chartInit', result);
+    }
+
+    onLeaveChartRoom(stockId: number, type: ChartType, client: CustomSocket) {
+        client.leave(this.chartRoom(stockId, type));
+    }
+
+    // 체결시 차트 업데이트
+    onTradeExecuted(stockId: number, price: bigint, quantity: bigint, matchedAt: Date) {
+        for (const type of CHART_TYPES) {
+            const key = this.key(stockId, type);
+            const candleTime = this.getCandleTime(matchedAt, type);
+            const existing = this.currentCandles.get(key);
+
+            // 현재 캔들 업데이트
+            if (!existing) {
+                // 새 봉 생성
+                this.currentCandles.set(key, {
+                    candleTime,
+                    open: price,
+                    high: price,
+                    low: price,
+                    close: price,
+                    volume: quantity,
+                });
+            } else if (existing.candleTime.getTime() !== candleTime.getTime()) {
+                // 새 봉 생성 (기존 봉 Pending 이전 후 생성)
+                this.pendingCandles.push({ stockId, type, candle: existing });
+                this.currentCandles.set(key, {
+                    candleTime,
+                    open: price,
+                    high: price,
+                    low: price,
+                    close: price,
+                    volume: quantity,
+                });
+            } else {
+                // 기존 봉 업데이트
+                if (price > existing.high) existing.high = price;
+                if (price < existing.low) existing.low = price;
+                existing.close = price;
+                existing.volume += quantity;
+            }
+
+            // 이벤트 전송
+            const candle = this.currentCandles.get(key);
+            this.server
+                ?.to(this.chartRoom(stockId, type))
+                .emit('chartUpdated', this.serializeCandle(candle));
+        }
+    }
+
+    // 현재 캔들 조회
+    getCurrentCandle(stockId: number, type: ChartType): InMemoryCandle | undefined {
+        return this.currentCandles.get(this.key(stockId, type));
+    }
+
+    // 상장 시 오늘 1d 봉 초기화 (상하한가 기준가 확보용)
+    initListingCandle(stockId: number, listingPrice: bigint) {
+        const key = this.key(stockId, '1d');
+        if (this.currentCandles.has(key)) return;
+
+        const kstStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+        const candleTime = new Date(kstStr + 'T00:00:00.000+09:00');
+
+        this.currentCandles.set(key, {
+            candleTime,
+            open: listingPrice,
+            high: listingPrice,
+            low: listingPrice,
+            close: listingPrice,
+            volume: 0n,
+        });
+    }
+
+    // Pending 캔들 꺼내기
+    drainPending(): PendingCandle[] {
+        const pending = this.pendingCandles;
+        this.pendingCandles = [];
+        return pending;
+    }
+
+    // Pending 캔들 복원
+    // NOTE: drain 후 DB 저장 실패시 복원용
+    returnPending(candles: PendingCandle[]) {
+        this.pendingCandles = [...candles, ...this.pendingCandles];
+    }
+
+    // 자정에 진행 중인 1d 봉을 pending으로 이동
+    flushDayCandles() {
+        for (const [key, candle] of this.currentCandles.entries()) {
+            if (key.endsWith(':1d')) {
+                const stockId = parseInt(key.split(':')[0]);
+                this.pendingCandles.push({ stockId, type: '1d', candle });
+                this.currentCandles.delete(key);
+            }
+        }
+    }
+}

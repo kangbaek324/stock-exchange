@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { ClientProxy } from '@nestjs/microservices';
-import { OrderStatus, Prisma, TradingType, User } from '@prisma/client';
+import { OrderStatus, OrderType, Prisma, TradingType, User } from '@prisma/client';
 import { lastValueFrom, retry, timer } from 'rxjs';
 import { OrderValidationService, TargetOrder } from './order-validation.service';
 import { OrderCommand } from '../type/order-command.type';
@@ -73,7 +73,10 @@ export class OrderService {
                     data: {
                         accountId,
                         stockId: command.stockId,
-                        price: BigInt(command.dto.price),
+                        price:
+                            command.dto.orderType === OrderType.MARKET
+                                ? BigInt(20000)
+                                : BigInt(command.dto.price),
                         quantity: BigInt(command.dto.quantity),
                         filledQuantity: BigInt(0),
                         orderType: command.dto.orderType,

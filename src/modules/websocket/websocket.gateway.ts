@@ -16,6 +16,8 @@ import { CustomSocket } from './interface/custom-socket.interface';
 import { StockWsService } from './service/stock-ws.service';
 import { AccountWsService } from './service/account-ws.service';
 import { OrderWsService } from './service/order-ws.service';
+import { ChartWsService } from './service/chart-ws.service';
+import { ChartType } from 'src/modules/chart/type/chart-type';
 
 @UseGuards(WsGuard)
 @WebSocketGateway(parseInt(process.env.WEBSOCKET_PORT), {
@@ -29,6 +31,7 @@ export class WebsocketGateway
         private readonly stockWsService: StockWsService,
         private readonly accountWsService: AccountWsService,
         private readonly orderWsService: OrderWsService,
+        private readonly chartWsService: ChartWsService,
     ) {}
 
     @WebSocketServer() server: Server;
@@ -38,7 +41,7 @@ export class WebsocketGateway
         this.stockWsService.setServer(server);
         this.accountWsService.setServer(server);
         this.orderWsService.setServer(server);
-        // this.chartWsService.setServer(server);
+        this.chartWsService.setServer(server);
     }
 
     handleConnection(client: CustomSocket) {
@@ -90,29 +93,31 @@ export class WebsocketGateway
         await this.orderWsService.sendOrderInit(resolvedAccountId);
     }
 
-    // @SubscribeMessage('joinChartRoom')
-    // handleJoinChartRoom(
-    //     @ConnectedSocket() client: CustomSocket,
-    //     @MessageBody('stockId') stockId: number,
-    //     @MessageBody('type') type: ChartType,
-    // ) {
-    //     this.chartWsService.onJoinChartWsRoom(stockId, type, client);
-    // }
-
-    // @SubscribeMessage('leaveChartRoom')
-    // handleLeaveChartRoom(
-    //     @ConnectedSocket() client: CustomSocket,
-    //     @MessageBody('stockId') stockId: number,
-    //     @MessageBody('type') type: ChartType,
-    // ) {
-    //     this.chartWsService.onLeaveChartWsRoom(stockId, type, client);
-    // }
-
     @SubscribeMessage('leaveAccountRoom')
     handleLeaveAccountRoom(
         @ConnectedSocket() client: CustomSocket,
         @MessageBody() accountId: number,
     ) {
         this.accountWsService.onLeaveAccountRoom(client, accountId);
+    }
+
+    @SubscribeMessage('joinChartRoom')
+    async handleJoinChartRoom(
+        @ConnectedSocket() client: CustomSocket,
+        @MessageBody('stockId') stockId: number,
+        @MessageBody('type') type: ChartType,
+        @MessageBody('from') from?: string,
+    ) {
+        const fromDate = from ? new Date(from) : undefined;
+        await this.chartWsService.onJoinChartRoom(stockId, type, client, fromDate);
+    }
+
+    @SubscribeMessage('leaveChartRoom')
+    handleLeaveChartRoom(
+        @ConnectedSocket() client: CustomSocket,
+        @MessageBody('stockId') stockId: number,
+        @MessageBody('type') type: ChartType,
+    ) {
+        this.chartWsService.onLeaveChartRoom(stockId, type, client);
     }
 }

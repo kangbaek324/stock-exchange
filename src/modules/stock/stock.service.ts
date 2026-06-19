@@ -1,12 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Prisma, StockStatus } from '@prisma/client';
+import { CandleType, Prisma, StockStatus } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, retry, timer } from 'rxjs';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { StockException } from './error/stock.exception';
 import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { StockDto } from './dto/stock.dto';
-import { StockLimitService } from 'src/modules/order/services/stock-limit.service';
 import { StockMessage } from './type/stock-message.type';
 import { ADMIN_SERVICE } from 'src/common/messaging/messaging.module';
 
@@ -33,7 +32,6 @@ export class StockService {
     constructor(
         @Inject(ADMIN_SERVICE) private client: ClientProxy,
         private readonly prismaService: PrismaService,
-        private readonly stockLimitService: StockLimitService,
     ) {}
 
     // 주식 상장
@@ -58,18 +56,16 @@ export class StockService {
                 select: STOCK_MESSAGE_SELECT,
             });
 
-            const limits = this.stockLimitService.getStockLimit(dto.listingPrice);
-
-            await tx.stockHistory.create({
+            await tx.candle.create({
                 data: {
                     stockId: created.id,
+                    candleTime: getKstDate(0),
+                    type: CandleType.ONE_DAY,
                     open: dto.listingPrice,
                     high: dto.listingPrice,
                     low: dto.listingPrice,
                     close: dto.listingPrice,
-                    date: getKstDate(0),
-                    lowerLimit: limits.lowerLimit,
-                    upperLimit: limits.upperLimit,
+                    volume: 0n,
                 },
             });
 
@@ -127,7 +123,20 @@ export class StockService {
         };
     }
 
-    // async getStockList() { ... }
+    // 상장된 주식 목록 조회 (상장 전 PENDING 제외)
+    async getStockList() {
+        const stocks = await this.prismaService.stock.findMany({
+            where: { status: { not: StockStatus.PENDING } },
+            select: { id: true, name: true, price: true, status: true },
+            orderBy: { id: 'asc' },
+        });
+
+        return stocks.map((stock) => ({
+            ...stock,
+            price: stock.price.toString(),
+        }));
+    }
+
     // async getStockInfo(stockId: number) { ... }
     // async updateStockStatus(dto: StockStatusDto, stockId: number) { ... }
 }

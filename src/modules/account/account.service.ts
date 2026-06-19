@@ -3,14 +3,6 @@ import { AccountStatus, Prisma, User, UserStock } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, retry, timer } from 'rxjs';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { AccountException } from './error/account.exception';
-import { withDrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
-import { TransferAccountBalanceDto } from './dto/transfer-account-balance.dto';
-import { DepositAccountBalanceDto } from './dto/deposit-account-balance.dto copy';
-import { WithdrawStockDto } from './dto/withdraw-stock.dto';
-import { DepositStockDto } from './dto/deposit-stock.dto';
-import { OrderException } from 'src/modules/order/error/order.exception';
-import { StockException } from 'src/modules/stock/error/stock.exception';
 import { AccountMessage } from './type/account-message.type';
 import { DATA_SERVICE } from 'src/common/messaging/messaging.module';
 
@@ -43,6 +35,7 @@ export class AccountService {
         const accounts = await this.prismaService.account.findMany({
             where: {
                 userId: user.id,
+                status: 'ACTIVE',
             },
             select: { id: true, accountNumber: true, balance: true },
         });
@@ -67,7 +60,7 @@ export class AccountService {
                 select: { accountNumber: true },
             });
 
-            let amount = 5000000000000000000n;
+            let amount = 1000000000000000n;
             const isExistUserAccount = await this.prismaService.account.findFirst({
                 where: { userId: user.id },
                 select: { id: true },

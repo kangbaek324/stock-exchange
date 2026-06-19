@@ -25,6 +25,7 @@ export interface TradeExecutedData {
     quantity: string;
     makerOrderId: string;
     takerOrderId: string;
+    executedAt: string;
 }
 
 // order.open / order.filled / order.canceled — 주문 상태 전이

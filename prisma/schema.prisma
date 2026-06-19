@@ -58,6 +58,15 @@ enum AccountStatus {
   ACTIVE // 활성
 }
 
+enum CandleType {
+  ONE_MINUTE      @map("1m")
+  FIVE_MINUTES    @map("5m")
+  FIFTEEN_MINUTES @map("15m")
+  THIRTY_MINUTES  @map("30m")
+  ONE_HOUR        @map("1h")
+  ONE_DAY         @map("1d")
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   username  String   @unique @db.VarChar(20)
@@ -111,31 +120,33 @@ model Stock {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime?   @updatedAt @map("updated_at")
 
-  userStocks     UserStock[]
-  orders         Order[]
-  trades         Trade[]
-  stockHistories StockHistory[]
+  userStocks UserStock[]
+  orders     Order[]
+  trades     Trade[]
+  candles    Candle[]
 
   @@index([publishedAt]) // 릴레이가 미발행 주식 스캔
   @@map("stocks")
 }
 
-// 주식 일별 히스토리
-model StockHistory {
+// 캔들 (차트 봉 데이터)
+model Candle {
   stockId    Int      @map("stock_id")
-  date       DateTime @db.Date
+  candleTime DateTime @map("candle_time")
+  type       CandleType
+  open       BigInt   @db.UnsignedBigInt
   high       BigInt   @db.UnsignedBigInt
   low        BigInt   @db.UnsignedBigInt
   close      BigInt   @db.UnsignedBigInt
-  open       BigInt?  @db.UnsignedBigInt
-  upperLimit BigInt   @map("upper_limit") @db.UnsignedBigInt
-  lowerLimit BigInt   @map("lower_limit") @db.UnsignedBigInt
+  volume     BigInt   @db.UnsignedBigInt
 
   stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
-  @@id([stockId, date])
-  @@map("stock_histories")
+  @@id([stockId, candleTime, type])
+  @@index([stockId, type, candleTime])
+  @@map("candles")
 }
+
 
 // 주식 계좌(보유 종목) 정보
 model UserStock {

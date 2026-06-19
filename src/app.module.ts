@@ -4,6 +4,7 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { OrderModule } from './modules/order/order.module';
 import { AccountModule } from './modules/account/account.module';
 import { StockModule } from './modules/stock/stock.module';
+import { ChartModule } from './modules/chart/chart.module';
 import { MessagingModule } from './common/messaging/messaging.module';
 import { WebsocketModule } from './modules/websocket/websocket.module';
 import { ConfigModule } from '@nestjs/config';
@@ -35,6 +36,7 @@ import { ConfigService } from '@nestjs/config';
         OrderModule,
         AccountModule,
         StockModule,
+        ChartModule,
         WebsocketModule,
     ],
 })
