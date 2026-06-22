@@ -319,8 +319,18 @@ export class ChartWsService implements OnModuleInit {
                     this.pendingCandles.push({ stockId, type, candle: existing });
                 }
 
-                // 현재 봉 데이터 생성
-                await this.recoverCurrentCandle(stockId, type);
+                // 해당 시간대 trades로 봉 복구 (재시작 등으로 메모리 유실된 경우)
+                const prevTrades = await this.prismaService.trade.findMany({
+                    where: { stockId, matchedAt: { gte: candleTime, lt: matchedAt } },
+                    orderBy: { matchedAt: 'asc' },
+                    select: { price: true, quantity: true },
+                });
+
+                const recovered = this.buildCandleFromTrades(candleTime, [
+                    ...prevTrades,
+                    { price, quantity },
+                ])!;
+                this.currentCandles.set(key, recovered);
             } else {
                 // 기존 봉 업데이트
                 if (price > existing.high) existing.high = price;
