@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `accounts` ADD COLUMN `status` ENUM('PENDING', 'ACTIVE') NOT NULL DEFAULT 'PENDING';

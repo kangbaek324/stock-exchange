@@ -1,0 +1,79 @@
+import { Injectable } from '@nestjs/common';
+import { CandleType } from '@prisma/client';
+import { PrismaService } from 'src/common/prisma/prisma.service';
+import { OrderException } from '../error/order.exception';
+import { getUtcMidnight } from 'src/common/helpers/get-utc-midnight';
+import { StockException } from 'src/modules/stock/error/stock.exception';
+import { calcStockLimit, getTickSize } from 'src/common/helpers/stock-limit';
+import { ChartWsService } from 'src/modules/websocket/service/chart-ws.service';
+
+@Injectable()
+export class StockLimitService {
+    constructor(
+        private prismaService: PrismaService,
+        private chartWsService: ChartWsService,
+    ) {}
+
+    tickSizeCheck(price: number) {
+        const tick = getTickSize(price);
+        if (tick > 1 && price % tick !== 0) {
+            throw new OrderException('INVALID_ORDER_TICK_SIZE');
+        }
+    }
+
+    // CONSIDER: 매번 사용할때 마다 상하한가를 계산하고 있기에, 이를 저장하는 로직이 필요함
+    async limitSizeCheck(stockId: number, price: number) {
+        const prevClose = await this.getPrevClose(stockId);
+        if (!prevClose) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
+
+        const limits = calcStockLimit(Number(prevClose));
+        if (price > limits.upperLimit || price < limits.lowerLimit) {
+            throw new OrderException('PRICE_OUT_OF_LIMIT');
+        }
+    }
+
+    // NOTE: 래퍼 함수
+    async getUpperLimit(stockId: number): Promise<bigint> {
+        const prevClose = await this.getPrevClose(stockId);
+        if (!prevClose) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
+        return BigInt(calcStockLimit(Number(prevClose)).upperLimit);
+    }
+
+    async getLowerLimit(stockId: number): Promise<bigint> {
+        const prevClose = await this.getPrevClose(stockId);
+        if (!prevClose) throw new StockException('STOCK_HISTORIES_NOT_FOUND');
+        return BigInt(calcStockLimit(Number(prevClose)).lowerLimit);
+    }
+
+    // 전일 종가 반환
+    // NOTE: 상장 당일일 경우 당일 시가를 반환
+    // NOTE: 캔들이 전혀 없으면 stock.price 반환
+    async getPrevClose(stockId: number): Promise<bigint | null> {
+        const todayCandle = this.chartWsService.getCurrentCandle(stockId, '1d');
+        const prevDbCandle = await this.prismaService.candle.findFirst({
+            where: {
+                stockId,
+                type: CandleType.ONE_DAY,
+                candleTime: { lt: getUtcMidnight(0) },
+            },
+            orderBy: { candleTime: 'desc' },
+            select: { close: true },
+        });
+
+        if (prevDbCandle?.close != null) return prevDbCandle.close;
+
+        // 상장 당일 거래 있음: 오늘 시가 반환
+        // 메모리에 없으면 trades로 복구 시도 (재시작 등)
+        const recovered =
+            todayCandle ??
+            (await this.chartWsService.recoverCurrentCandle(stockId, '1d'));
+        if (recovered?.open != null) return recovered.open;
+
+        // 상장 당일이 거래 없음: listingPrice 반환
+        const stock = await this.prismaService.stock.findUnique({
+            where: { id: stockId },
+            select: { listingPrice: true },
+        });
+        return stock?.listingPrice ?? null;
+    }
+}
