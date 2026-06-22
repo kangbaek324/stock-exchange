@@ -20,6 +20,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:seed": "prisma db seed"
   },
+  "prisma": {
+    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
+  },
   "dependencies": {
     "@datastructures-js/priority-queue": "^6.3.3",
     "@nestjs-modules/ioredis": "^2.0.2",
