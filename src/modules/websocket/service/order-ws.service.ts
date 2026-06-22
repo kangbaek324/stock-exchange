@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { Server } from 'socket.io';
-import { getKstDate } from 'src/common/helpers/get-kst-date';
+import { getUtcMidnight } from 'src/common/helpers/get-utc-midnight';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 
 @Injectable()
@@ -62,7 +62,7 @@ export class OrderWsService {
 
     // 당일 체결 내역 전송 (부분 체결 포함)
     async sendFilledOrders(accountId: number) {
-        const today = getKstDate();
+        const today = getUtcMidnight();
 
         const orders = await this.prismaService.order.findMany({
             where: {

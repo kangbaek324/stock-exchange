@@ -1,10 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { CandleType, Prisma, StockStatus } from '@prisma/client';
+import { Prisma, StockStatus } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, retry, timer } from 'rxjs';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { StockException } from './error/stock.exception';
-import { getKstDate } from 'src/common/helpers/get-kst-date';
 import { StockDto } from './dto/stock.dto';
 import { StockMessage } from './type/stock-message.type';
 import { ADMIN_SERVICE } from 'src/common/messaging/messaging.module';
@@ -52,21 +51,9 @@ export class StockService {
                 data: {
                     name: dto.name,
                     price: dto.listingPrice,
+                    listingPrice: dto.listingPrice,
                 },
                 select: STOCK_MESSAGE_SELECT,
-            });
-
-            await tx.candle.create({
-                data: {
-                    stockId: created.id,
-                    candleTime: getKstDate(0),
-                    type: CandleType.ONE_DAY,
-                    open: dto.listingPrice,
-                    high: dto.listingPrice,
-                    low: dto.listingPrice,
-                    close: dto.listingPrice,
-                    volume: 0n,
-                },
             });
 
             return created;

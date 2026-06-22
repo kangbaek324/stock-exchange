@@ -50,9 +50,6 @@ export class ChartWsService implements OnModuleInit {
             orderBy: { candleTime: 'desc' },
         });
 
-        const now = new Date();
-        const currentCandleTime = this.getCandleTime(now, type);
-
         // 마지막 저장 봉이 있으면 그 봉 다음 시간부터, 없으면 전체 조회
         const fromTime = lastCandle
             ? new Date(lastCandle.candleTime.getTime() + this.getDurationMs(type))
@@ -89,12 +86,14 @@ export class ChartWsService implements OnModuleInit {
             }
         }
 
-        // 현재 진행 중인 봉은 currentCandles, 나머지는 미저장 완성봉으로 바로 DB에 저장
+        const now = new Date();
+        const currentCandleTime = this.getCandleTime(now, type);
+
+        // 현재 진행 중인 봉은 스킵(차트 조회 등의 직접적인 조회시에 복구)
+        // 미저장 완성봉으로 바로 DB에 저장
         const currentTimeKey = currentCandleTime.getTime();
         for (const [timeKey, candle] of candleMap) {
-            if (timeKey === currentTimeKey) {
-                this.currentCandles.set(this.key(stockId, type), candle);
-            } else {
+            if (timeKey !== currentTimeKey) {
                 await this.prismaService.candle.upsert({
                     where: {
                         stockId_candleTime_type: {
@@ -188,10 +187,9 @@ export class ChartWsService implements OnModuleInit {
             case '1h':
                 d.setUTCMinutes(0, 0, 0);
                 break;
-            case '1d': {
-                const kstStr = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
-                return new Date(kstStr + 'T00:00:00.000+09:00');
-            }
+            case '1d':
+                d.setUTCHours(0, 0, 0, 0);
+                break;
         }
 
         return d;
@@ -234,8 +232,10 @@ export class ChartWsService implements OnModuleInit {
             result.push(this.serializeCandle(candle));
         }
 
-        // 현재 진행 중인 봉 추가
-        const current = this.currentCandles.get(this.key(stockId, type));
+        // 현재 진행 중인 봉 추가 (메모리 없으면 trades로 복구)
+        const current =
+            this.currentCandles.get(this.key(stockId, type)) ??
+            (await this.recoverCurrentCandle(stockId, type));
         if (current) {
             result.push(this.serializeCandle(current));
         }
@@ -248,6 +248,56 @@ export class ChartWsService implements OnModuleInit {
 
     onLeaveChartRoom(stockId: number, type: ChartType, client: CustomSocket) {
         client.leave(this.chartRoom(stockId, type));
+    }
+
+    private buildCandleFromTrades(
+        candleTime: Date,
+        trades: { price: bigint; quantity: bigint }[],
+    ): InMemoryCandle | null {
+        if (trades.length === 0) return null;
+        let high = trades[0].price;
+        let low = trades[0].price;
+        let volume = 0n;
+        for (const t of trades) {
+            if (t.price > high) high = t.price;
+            if (t.price < low) low = t.price;
+            volume += t.quantity;
+        }
+        return {
+            candleTime,
+            open: trades[0].price,
+            high,
+            low,
+            close: trades[trades.length - 1].price,
+            volume,
+        };
+    }
+
+    async recoverCurrentCandle(
+        stockId: number,
+        type: ChartType,
+    ): Promise<InMemoryCandle | undefined> {
+        const key = this.key(stockId, type);
+
+        const inMemory = this.currentCandles.get(key);
+        if (inMemory) return inMemory;
+
+        const candleTime = this.getCandleTime(new Date(), type);
+        const trades = await this.prismaService.trade.findMany({
+            where: { stockId, matchedAt: { gte: candleTime } },
+            orderBy: { matchedAt: 'asc' },
+            select: { price: true, quantity: true },
+        });
+
+        // await 사이에 onTradeExecuted가 먼저 채웠을 수 있으므로 재확인
+        const inMemoryAfter = this.currentCandles.get(key);
+        if (inMemoryAfter) return inMemoryAfter;
+
+        const candle = this.buildCandleFromTrades(candleTime, trades);
+        if (candle) {
+            this.currentCandles.set(key, candle);
+        }
+        return candle ?? undefined;
     }
 
     // 체결시 차트 업데이트
@@ -269,43 +319,8 @@ export class ChartWsService implements OnModuleInit {
                     this.pendingCandles.push({ stockId, type, candle: existing });
                 }
 
-                // 해당 시간대 trades로 봉 복구 (재시작 등으로 메모리 유실된 경우)
-                const prevTrades = await this.prismaService.trade.findMany({
-                    where: { stockId, matchedAt: { gte: candleTime, lt: matchedAt } },
-                    orderBy: { matchedAt: 'asc' },
-                    select: { price: true, quantity: true },
-                });
-
-                if (prevTrades.length > 0) {
-                    let high = prevTrades[0].price;
-                    let low = prevTrades[0].price;
-                    let volume = 0n;
-                    for (const t of prevTrades) {
-                        if (t.price > high) high = t.price;
-                        if (t.price < low) low = t.price;
-                        volume += t.quantity;
-                    }
-                    if (price > high) high = price;
-                    if (price < low) low = price;
-
-                    this.currentCandles.set(key, {
-                        candleTime,
-                        open: prevTrades[0].price,
-                        high,
-                        low,
-                        close: price,
-                        volume: volume + quantity,
-                    });
-                } else {
-                    this.currentCandles.set(key, {
-                        candleTime,
-                        open: price,
-                        high: price,
-                        low: price,
-                        close: price,
-                        volume: quantity,
-                    });
-                }
+                // 현재 봉 데이터 생성
+                await this.recoverCurrentCandle(stockId, type);
             } else {
                 // 기존 봉 업데이트
                 if (price > existing.high) existing.high = price;
@@ -330,24 +345,6 @@ export class ChartWsService implements OnModuleInit {
     // 현재 캔들 직접 등록 (외부 복구용)
     setCurrentCandle(stockId: number, type: ChartType, candle: InMemoryCandle): void {
         this.currentCandles.set(this.key(stockId, type), candle);
-    }
-
-    // 상장 시 오늘 1d 봉 초기화 (상하한가 기준가 확보용)
-    initListingCandle(stockId: number, listingPrice: bigint) {
-        const key = this.key(stockId, '1d');
-        if (this.currentCandles.has(key)) return;
-
-        const kstStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
-        const candleTime = new Date(kstStr + 'T00:00:00.000+09:00');
-
-        this.currentCandles.set(key, {
-            candleTime,
-            open: listingPrice,
-            high: listingPrice,
-            low: listingPrice,
-            close: listingPrice,
-            volume: 0n,
-        });
     }
 
     // Pending 캔들 꺼내기

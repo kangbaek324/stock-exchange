@@ -23,7 +23,6 @@ interface EffectPlan {
     filledOrders: Set<number>; // 체결탭 - 계좌별 체결 내역 (accountId)
     accountBalance: Map<number, AccountBalanceData>; // 잔고탭 (accountId)
     holding: Map<string, HoldingUpdatedData>; // 보유 잔고탭 (accountId:stockId)
-    listedStocks: Map<number, bigint>; // 상장 종목 (stockId → 상장가)
 }
 
 @Controller()
@@ -54,7 +53,6 @@ export class EventConsumer {
                 filledOrders: new Set(),
                 accountBalance: new Map(),
                 holding: new Map(),
-                listedStocks: new Map(),
             };
 
             // Plan 데이터 채우기
@@ -140,16 +138,6 @@ export class EventConsumer {
 
                 return;
 
-            case 'stock.listed':
-                // TODO: 별론데
-                if (event.data.status === 'LISTED') {
-                    plan.listedStocks.set(
-                        Number(event.data.id),
-                        BigInt(event.data.price),
-                    );
-                }
-                return;
-
             default: {
                 const _exhaustive: never = event;
                 this.logger.warn(`알 수 없는 이벤트: ${JSON.stringify(_exhaustive)}`);
@@ -205,11 +193,6 @@ export class EventConsumer {
         // 보유 잔고탭 업데이트
         for (const [, data] of plan.holding) {
             this.accountWsService.sendHolding(Number(data.accountId), data);
-        }
-
-        // 상장 종목 1d 봉 초기화
-        for (const [stockId, listingPrice] of plan.listedStocks) {
-            this.chartWsService.initListingCandle(stockId, listingPrice);
         }
     }
 }

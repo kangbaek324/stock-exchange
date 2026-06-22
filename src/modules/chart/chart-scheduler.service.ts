@@ -13,7 +13,7 @@ export class ChartSchedulerService {
         private readonly chartCandleService: ChartWsService,
     ) {}
 
-    @Cron('0 0 0 * * *') // 매일 자정
+    @Cron('0 0 0 * * *', { timeZone: 'UTC' }) // 매일 UTC 자정 (= KST 09:00)
     async onMidnight() {
         this.chartCandleService.flushDayCandles();
         await this.flushPendingCandles();

@@ -12,8 +12,7 @@ export type DomainEvent =
     | { pattern: 'order.rejected'; data: OrderRejectedData }
     | { pattern: 'account.updated'; data: AccountBalanceData }
     | { pattern: 'account.activated'; data: AccountBalanceData }
-    | { pattern: 'holding.updated'; data: HoldingUpdatedData }
-    | { pattern: 'stock.listed'; data: StockListedData };
+    | { pattern: 'holding.updated'; data: HoldingUpdatedData };
 
 export type EventName = DomainEvent['pattern'];
 

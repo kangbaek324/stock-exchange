@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CandleType } from '@prisma/client';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { OrderException } from '../error/order.exception';
-import { getKstDate } from 'src/common/helpers/get-kst-date';
+import { getUtcMidnight } from 'src/common/helpers/get-utc-midnight';
 import { StockException } from 'src/modules/stock/error/stock.exception';
 import { calcStockLimit, getTickSize } from 'src/common/helpers/stock-limit';
 import { ChartWsService } from 'src/modules/websocket/service/chart-ws.service';
@@ -54,48 +54,26 @@ export class StockLimitService {
             where: {
                 stockId,
                 type: CandleType.ONE_DAY,
-                candleTime: { lt: getKstDate(0) },
+                candleTime: { lt: getUtcMidnight(0) },
             },
             orderBy: { candleTime: 'desc' },
             select: { close: true },
         });
 
         if (prevDbCandle?.close != null) return prevDbCandle.close;
-        if (todayCandle?.open != null) return todayCandle.open;
 
-        // 오늘 봉이 메모리에 없을 경우 오늘 trades로 복구 후 메모리 등록 (상장 당일 재시작)
-        const todayTrades = await this.prismaService.trade.findMany({
-            where: { stockId, matchedAt: { gte: getKstDate(0) } },
-            orderBy: { matchedAt: 'asc' },
-            select: { price: true, quantity: true },
-        });
+        // 상장 당일 거래 있음: 오늘 시가 반환
+        // 메모리에 없으면 trades로 복구 시도 (재시작 등)
+        const recovered =
+            todayCandle ??
+            (await this.chartWsService.recoverCurrentCandle(stockId, '1d'));
+        if (recovered?.open != null) return recovered.open;
 
-        if (todayTrades.length > 0) {
-            let high = todayTrades[0].price,
-                low = todayTrades[0].price,
-                volume = 0n;
-            for (const t of todayTrades) {
-                if (t.price > high) high = t.price;
-                if (t.price < low) low = t.price;
-                volume += t.quantity;
-            }
-            const candle = {
-                candleTime: getKstDate(0),
-                open: todayTrades[0].price,
-                high,
-                low,
-                close: todayTrades[todayTrades.length - 1].price,
-                volume,
-            };
-            this.chartWsService.setCurrentCandle(stockId, '1d', candle);
-            return candle.open;
-        }
-
-        // 상장 당일이지만 거래 없음: stock.price 반환
+        // 상장 당일이 거래 없음: listingPrice 반환
         const stock = await this.prismaService.stock.findUnique({
             where: { id: stockId },
-            select: { price: true },
+            select: { listingPrice: true },
         });
-        return stock?.price ?? null;
+        return stock?.listingPrice ?? null;
     }
 }
