@@ -20,7 +20,7 @@ import { ChartWsService } from './service/chart-ws.service';
 import { ChartType } from 'src/modules/chart/type/chart-type';
 
 @UseGuards(WsGuard)
-@WebSocketGateway(parseInt(process.env.WEBSOCKET_PORT), {
+@WebSocketGateway({
     namespace: '/stock',
     cors: { origin: '*' },
 })
@@ -89,7 +89,10 @@ export class WebsocketGateway
         @ConnectedSocket() client: CustomSocket,
         @MessageBody() accountId?: number,
     ) {
-        const resolvedAccountId = await this.accountWsService.onJoinAccountRoom(client, accountId);
+        const resolvedAccountId = await this.accountWsService.onJoinAccountRoom(
+            client,
+            accountId,
+        );
         await this.orderWsService.sendOrderInit(resolvedAccountId);
     }
 
