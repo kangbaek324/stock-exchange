@@ -70,15 +70,22 @@ export class OrderService {
     ): Promise<PersistedOrder> {
         switch (command.type) {
             case 'buy':
-            case 'sell':
+            case 'sell': {
+                let price: bigint;
+                if (command.dto.orderType === OrderType.MARKET) {
+                    price =
+                        command.type === 'buy'
+                            ? await this.stockLimitService.getUpperLimit(command.stockId)
+                            : await this.stockLimitService.getLowerLimit(command.stockId);
+                } else {
+                    price = BigInt(command.dto.price);
+                }
+
                 return this.prismaService.order.create({
                     data: {
                         accountId,
                         stockId: command.stockId,
-                        price:
-                            command.dto.orderType === OrderType.MARKET && command.type === 'buy'
-                                ? await this.stockLimitService.getUpperLimit(command.stockId)
-                                : BigInt(command.dto.price),
+                        price,
                         quantity: BigInt(command.dto.quantity),
                         filledQuantity: BigInt(0),
                         orderType: command.dto.orderType,
@@ -87,6 +94,7 @@ export class OrderService {
                     },
                     select: ORDER_MESSAGE_SELECT,
                 });
+            }
             // 정정, 취소 주문은 매칭엔진에게 트리거만 하는 역할
             // 주문 대체 처리, 잔량 계산 후 새 주문 생성은 매칭엔진이 처리
             case 'edit':
