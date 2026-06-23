@@ -6,7 +6,6 @@ import { AccountModule } from './modules/account/account.module';
 import { StockModule } from './modules/stock/stock.module';
 import { ChartModule } from './modules/chart/chart.module';
 import { MessagingModule } from './common/messaging/messaging.module';
-import { WebsocketModule } from './modules/websocket/websocket.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { AppController } from './app.controller';
@@ -37,7 +36,6 @@ import { ScheduleModule } from '@nestjs/schedule';
         AccountModule,
         StockModule,
         ChartModule,
-        WebsocketModule,
     ],
 })
 export class AppModule {

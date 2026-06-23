@@ -5,14 +5,10 @@ import { OrderException } from '../error/order.exception';
 import { getUtcMidnight } from 'src/common/helpers/get-utc-midnight';
 import { StockException } from 'src/modules/stock/error/stock.exception';
 import { calcStockLimit, getTickSize } from 'src/common/helpers/stock-limit';
-import { ChartWsService } from 'src/modules/websocket/service/chart-ws.service';
 
 @Injectable()
 export class StockLimitService {
-    constructor(
-        private prismaService: PrismaService,
-        private chartWsService: ChartWsService,
-    ) {}
+    constructor(private prismaService: PrismaService) {}
 
     tickSizeCheck(price: number) {
         const tick = getTickSize(price);
@@ -49,7 +45,6 @@ export class StockLimitService {
     // NOTE: 상장 당일일 경우 당일 시가를 반환
     // NOTE: 캔들이 전혀 없으면 stock.price 반환
     async getPrevClose(stockId: number): Promise<bigint | null> {
-        const todayCandle = this.chartWsService.getCurrentCandle(stockId, '1d');
         const prevDbCandle = await this.prismaService.candle.findFirst({
             where: {
                 stockId,
@@ -62,12 +57,13 @@ export class StockLimitService {
 
         if (prevDbCandle?.close != null) return prevDbCandle.close;
 
-        // 상장 당일 거래 있음: 오늘 시가 반환
-        // 메모리에 없으면 trades로 복구 시도 (재시작 등)
-        const recovered =
-            todayCandle ??
-            (await this.chartWsService.recoverCurrentCandle(stockId, '1d'));
-        if (recovered?.open != null) return recovered.open;
+        const todayFirstTrade = await this.prismaService.trade.findFirst({
+            where: { stockId, matchedAt: { gte: getUtcMidnight(0) } },
+            orderBy: { matchedAt: 'asc' },
+            select: { price: true },
+        });
+
+        if (todayFirstTrade?.price != null) return todayFirstTrade.price;
 
         // 상장 당일이 거래 없음: listingPrice 반환
         const stock = await this.prismaService.stock.findUnique({
