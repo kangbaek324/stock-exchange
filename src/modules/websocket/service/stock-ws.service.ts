@@ -6,12 +6,14 @@ import { Server } from 'socket.io';
 import { ChartWsService } from './chart-ws.service';
 import { StockLimitService } from 'src/modules/order/services/stock-limit.service';
 import { calcStockLimit } from 'src/common/helpers/stock-limit';
+import { hasRoomMembers } from './socket-room.util';
 
 // TODO / CONSIDER: 체결 기록 및 호가창 전송시 매번 SQL 조회를 하는 중
 // 캐싱 도입혹은 별도의 방법으로 DB 사용을 줄이면 좋을것 같음.
 @Injectable()
 export class StockWsService {
     private server: Server;
+
     constructor(
         private readonly prismaService: PrismaService,
         private readonly chartWsService: ChartWsService,
@@ -65,10 +67,14 @@ export class StockWsService {
 
     // 가격 및 호가창에 대한 정보 전송
     async sendStockInfo(stockId: number) {
+        if (!hasRoomMembers(this.server, this.stockRoom(stockId))) return;
+
         const rawStock = await this.prismaService.stock.findUnique({
             where: { id: stockId },
             select: { id: true, name: true, price: true },
         });
+        if (!rawStock) return;
+
         const stock = { ...rawStock, price: rawStock.price.toString() };
 
         const todayCandle = this.chartWsService.getCurrentCandle(stockId, '1d');
@@ -94,6 +100,8 @@ export class StockWsService {
 
     // 호가창 데이터 전송
     async sendOrderBook(stockId: number) {
+        if (!hasRoomMembers(this.server, this.stockRoom(stockId))) return;
+
         // 매수호가 조회
         let buyOrderbook: any[] = await this.prismaService.$queryRaw`
             SELECT price, SUM(quantity - filled_quantity) AS quantity
@@ -134,6 +142,8 @@ export class StockWsService {
 
     // 체결 기록 전송
     async sendMatchedList(stockId: number) {
+        if (!hasRoomMembers(this.server, this.stockRoom(stockId))) return;
+
         let matchedList: any[] = await this.prismaService.$queryRaw`
               select price, quantity, (select trading_type from orders o where o.id = t.taker_order_id) as type
               from trades t where stock_id = ${stockId}
@@ -150,6 +160,8 @@ export class StockWsService {
 
     // 프론트에서 계좌 연산을 위한 주식 가격 전송
     async sendStockPrice(stockId: number, price: string) {
+        if (!hasRoomMembers(this.server, this.stockPriceRoom(stockId))) return;
+
         this.server.to(this.stockPriceRoom(stockId)).emit('stockPriceUpdated', price);
     }
 }

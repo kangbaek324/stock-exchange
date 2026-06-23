@@ -147,22 +147,24 @@ export class EventConsumer {
 
     // 창 업데이트
     private async flush(plan: EffectPlan): Promise<void> {
+        const tasks: Promise<void>[] = [];
+
         // 주식 정보 업데이트 (체결시에만 현재가/고저가 변경)
         for (const stockId of plan.stockInfo) {
-            this.stockWsService.sendStockInfo(stockId);
+            tasks.push(this.stockWsService.sendStockInfo(stockId));
             if (plan.stockPrice != null) {
-                this.stockWsService.sendStockPrice(stockId, plan.stockPrice);
+                tasks.push(this.stockWsService.sendStockPrice(stockId, plan.stockPrice));
             }
         }
 
         // 호가창탭 업데이트
         for (const stockId of plan.orderBook) {
-            this.stockWsService.sendOrderBook(stockId);
+            tasks.push(this.stockWsService.sendOrderBook(stockId));
         }
 
         // 체결 목록 (호가창)
         for (const stockId of plan.matchedList) {
-            this.stockWsService.sendMatchedList(stockId);
+            tasks.push(this.stockWsService.sendMatchedList(stockId));
         }
 
         // 차트탭 업데이트
@@ -177,13 +179,15 @@ export class EventConsumer {
 
         // 미체결탭 업데이트
         for (const accountId of plan.openOrders) {
-            this.orderWsService.sendOpenOrders(accountId);
+            tasks.push(this.orderWsService.sendOpenOrders(accountId));
         }
 
         // 체결탭(계좌별) 업데이트
         for (const accountId of plan.filledOrders) {
-            this.orderWsService.sendFilledOrders(accountId);
+            tasks.push(this.orderWsService.sendFilledOrders(accountId));
         }
+
+        await this.flushWsTasks(tasks);
 
         // 잔고탭 업데이트
         for (const [accountId, data] of plan.accountBalance) {
@@ -193,6 +197,19 @@ export class EventConsumer {
         // 보유 잔고탭 업데이트
         for (const [, data] of plan.holding) {
             this.accountWsService.sendHolding(Number(data.accountId), data);
+        }
+    }
+
+    private async flushWsTasks(tasks: Promise<void>[]) {
+        const results = await Promise.allSettled(tasks);
+
+        for (const result of results) {
+            if (result.status === 'rejected') {
+                this.logger.error(
+                    '웹소켓 조회 업데이트 실패',
+                    result.reason instanceof Error ? result.reason.stack : result.reason,
+                );
+            }
         }
     }
 }

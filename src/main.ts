@@ -51,7 +51,7 @@ async function bootstrap() {
             queueOptions: {
                 durable: true,
             },
-            prefetchCount: 1,
+            prefetchCount: parseInt(process.env.EVENT_QUEUE_PREFETCH ?? '10', 10),
             noAck: false,
             deserializer: new EventBatchDeserializer(),
         },

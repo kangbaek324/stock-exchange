@@ -3,10 +3,12 @@ import { OrderStatus } from '@prisma/client';
 import { Server } from 'socket.io';
 import { getUtcMidnight } from 'src/common/helpers/get-utc-midnight';
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import { hasRoomMembers } from './socket-room.util';
 
 @Injectable()
 export class OrderWsService {
     private server: Server;
+
     constructor(private readonly prismaService: PrismaService) {}
 
     setServer(server: Server) {
@@ -27,6 +29,8 @@ export class OrderWsService {
 
     // 미체결 주문 전송
     async sendOpenOrders(accountId: number) {
+        if (!hasRoomMembers(this.server, this.accountRoom(accountId))) return;
+
         const orders = await this.prismaService.order.findMany({
             where: { accountId, status: OrderStatus.OPEN },
             orderBy: { createdAt: 'desc' },
@@ -62,6 +66,8 @@ export class OrderWsService {
 
     // 당일 체결 내역 전송 (부분 체결 포함)
     async sendFilledOrders(accountId: number) {
+        if (!hasRoomMembers(this.server, this.accountRoom(accountId))) return;
+
         const today = getUtcMidnight();
 
         const orders = await this.prismaService.order.findMany({
