@@ -13,6 +13,7 @@ import {
 import { Server } from 'socket.io';
 import { WsGuard } from './guard/ws.guard';
 import { CustomSocket } from './interface/custom-socket.interface';
+import { WebsocketException } from './error/websocket.exception';
 import { StockWsService } from './service/stock-ws.service';
 import { AccountWsService } from './service/account-ws.service';
 import { OrderWsService } from './service/order-ws.service';
@@ -57,6 +58,7 @@ export class WebsocketGateway
         @MessageBody() stockId: number,
         @ConnectedSocket() client: CustomSocket,
     ) {
+        if (stockId == null) throw new WebsocketException('INVALID_PAYLOAD');
         await this.stockWsService.onJoinStockRoom(stockId, client);
     }
 
@@ -65,6 +67,7 @@ export class WebsocketGateway
         @MessageBody() stockId: number,
         @ConnectedSocket() client: CustomSocket,
     ) {
+        if (stockId == null) throw new WebsocketException('INVALID_PAYLOAD');
         this.stockWsService.onJoinStockPriceRoom(stockId, client);
     }
 
@@ -73,6 +76,7 @@ export class WebsocketGateway
         @MessageBody() stockId: number,
         @ConnectedSocket() client: CustomSocket,
     ) {
+        if (stockId == null) throw new WebsocketException('INVALID_PAYLOAD');
         this.stockWsService.onLeaveStockRoom(stockId, client);
     }
 
@@ -81,6 +85,7 @@ export class WebsocketGateway
         @MessageBody() stockId: number,
         @ConnectedSocket() client: CustomSocket,
     ) {
+        if (stockId == null) throw new WebsocketException('INVALID_PAYLOAD');
         this.stockWsService.onLeaveStockPriceRoom(stockId, client);
     }
 
@@ -101,6 +106,7 @@ export class WebsocketGateway
         @ConnectedSocket() client: CustomSocket,
         @MessageBody() accountId: number,
     ) {
+        if (accountId == null) throw new WebsocketException('INVALID_PAYLOAD');
         this.accountWsService.onLeaveAccountRoom(client, accountId);
     }
 
@@ -111,6 +117,7 @@ export class WebsocketGateway
         @MessageBody('type') type: ChartType,
         @MessageBody('from') from?: string,
     ) {
+        if (stockId == null || type == null) throw new WebsocketException('INVALID_PAYLOAD');
         const fromDate = from ? new Date(from) : undefined;
         await this.chartWsService.onJoinChartRoom(stockId, type, client, fromDate);
     }
@@ -121,6 +128,7 @@ export class WebsocketGateway
         @MessageBody('stockId') stockId: number,
         @MessageBody('type') type: ChartType,
     ) {
+        if (stockId == null || type == null) throw new WebsocketException('INVALID_PAYLOAD');
         this.chartWsService.onLeaveChartRoom(stockId, type, client);
     }
 }
