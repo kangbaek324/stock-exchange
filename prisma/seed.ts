@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
 import { ClientProxy } from '@nestjs/microservices';
 import * as bcrypt from 'bcrypt';
 import { lastValueFrom } from 'rxjs';
@@ -15,10 +16,8 @@ interface AccountResult {
 }
 
 const SEED_PASSWORD = 'password1234';
-const SEED_USERS = [
-    { username: 'seed_user1', email: 'seed_user1@example.com' },
-    { username: 'seed_user2', email: 'seed_user2@example.com' },
-];
+const SEED_USER = { username: 'BOT1234', email: 'bot@example.com' };
+const SEED_ACCOUNT_COUNT = 2;
 
 async function seed() {
     const app = await NestFactory.createApplicationContext(AppModule, {
@@ -28,6 +27,7 @@ async function seed() {
     const stockService = app.get(StockService);
     const accountService = app.get(AccountService);
     const prismaService = app.get(PrismaService);
+    const jwtService = app.get(JwtService);
     const adminClient = app.get<ClientProxy>(ADMIN_SERVICE);
 
     // 1. 주식 상장
@@ -41,47 +41,52 @@ async function seed() {
         console.log('    건너뜀: 이미 존재하는 주식');
     }
 
-    // 2. 유저 생성 및 계좌 개설
+    // 2. BOT 유저 생성 및 계좌 2개 개설
     console.log('[2] 계좌 개설');
     const hashedPassword = await bcrypt.hash(SEED_PASSWORD, 10);
     const accounts: AccountResult[] = [];
     let createdAccountCount = 0;
 
-    for (const userData of SEED_USERS) {
-        let user = await prismaService.user.findUnique({
-            where: { username: userData.username },
+    let user = await prismaService.user.findUnique({
+        where: { username: SEED_USER.username },
+    });
+
+    if (!user) {
+        user = await prismaService.user.create({
+            data: {
+                username: SEED_USER.username,
+                password: hashedPassword,
+                email: SEED_USER.email,
+            },
         });
+        console.log(`    완료: ${SEED_USER.username} 유저 생성 (userId=${user.id})`);
+    } else {
+        console.log(
+            `    건너뜀: ${SEED_USER.username} 유저 이미 존재 (userId=${user.id})`,
+        );
+    }
 
-        if (!user) {
-            user = await prismaService.user.create({
-                data: {
-                    username: userData.username,
-                    password: hashedPassword,
-                    email: userData.email,
-                },
-            });
-        }
+    const existingAccounts = await prismaService.account.findMany({
+        where: { userId: user.id },
+        select: { id: true, accountNumber: true, balance: true },
+        orderBy: { id: 'asc' },
+        take: SEED_ACCOUNT_COUNT,
+    });
 
-        const existing = await prismaService.account.findFirst({
-            where: { userId: user.id },
-            select: { id: true, accountNumber: true, balance: true },
-        });
+    for (const existing of existingAccounts) {
+        accounts.push({ ...existing, balance: existing.balance.toString() });
+        console.log(`    건너뜀: 계좌 이미 존재 (accountId=${existing.id})`);
+    }
 
-        if (existing) {
-            accounts.push({ ...existing, balance: existing.balance.toString() });
-            console.log(
-                `    건너뜀: ${userData.username} 계좌 이미 존재 (accountId=${existing.id})`,
-            );
-        } else {
-            const result = (await accountService.createAccount(user)) as AccountResult;
-            accounts.push(result);
-            createdAccountCount++;
-            console.log(`    완료: ${userData.username} (accountId=${result.id})`);
-        }
+    for (let i = accounts.length; i < SEED_ACCOUNT_COUNT; i++) {
+        const result = (await accountService.createAccount(user)) as AccountResult;
+        accounts.push(result);
+        createdAccountCount++;
+        console.log(`    완료: ${SEED_USER.username} 계좌 개설 (accountId=${result.id})`);
     }
 
     const shouldAdjustSeedBalances =
-        createdStock && createdAccountCount === SEED_USERS.length;
+        createdStock && createdAccountCount === SEED_ACCOUNT_COUNT;
 
     // 3. 잔액 추가 (admin.balance.adjust)
     console.log('[3] 잔액 추가');
@@ -110,7 +115,7 @@ async function seed() {
                 id: '4',
                 accountId: accounts[1].id.toString(),
                 stockId: '1',
-                delta: '1000000000000000',
+                delta: '1000000000',
                 average: '10000',
             }),
         );
@@ -118,6 +123,17 @@ async function seed() {
     } else {
         console.log('    건너뜀: 주식 상장 또는 계좌 개설 단계가 건너뜀');
     }
+
+    const accessToken = jwtService.sign(
+        { userId: user.id },
+        {
+            expiresIn: '100y',
+            secret: process.env.ACCESS_TOKEN_SECRET,
+        },
+    );
+
+    console.log('\nBOT access token');
+    console.log(accessToken);
 
     await app.close();
     console.log('\n시드 데이터 설정 완료');
