@@ -52,7 +52,9 @@ export class OrderService {
     // 주문 생성
     async createOrder(user: User, command: OrderCommand) {
         const { accountId, target } = await this.orderValidation.validate(command, user);
-        const order = await this.persistOrder(command, accountId, target);
+        const order = await this.prismaService.retryWrite(() =>
+            this.persistOrder(command, accountId, target),
+        );
         await this.publishAndMark(order);
 
         return {
@@ -147,10 +149,12 @@ export class OrderService {
         }
 
         // 발행 성공 마킹 (status 변경은 엔진이 처리)
-        await this.prismaService.order.update({
-            where: { id: order.id },
-            data: { publishedAt: new Date() },
-        });
+        await this.prismaService.retryWrite(() =>
+            this.prismaService.order.update({
+                where: { id: order.id },
+                data: { publishedAt: new Date() },
+            }),
+        );
     }
 
     // 릴레이용: 아직 큐 적재 안 된(RECEIVED·publishedAt=null) 주문을 재발행
