@@ -191,6 +191,9 @@ model Order {
   tradesAsTaker Trade[] @relation("TradeTaker")
 
   @@index([publishedAt]) // 릴레이가 미발행 주문 스캔
+  @@index([stockId, status, tradingType, price])
+  @@index([accountId, status, createdAt])
+  @@index([accountId, createdAt])
   @@map("orders")
 }
 
@@ -208,6 +211,7 @@ model Trade {
   makerOrder Order @relation("TradeMaker", fields: [makerOrderId], references: [id])
   takerOrder Order @relation("TradeTaker", fields: [takerOrderId], references: [id])
 
+  @@index([stockId, matchedAt])
   @@map("trades")
 }
 
