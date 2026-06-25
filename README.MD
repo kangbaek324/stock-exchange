@@ -188,6 +188,8 @@ erDiagram
 | `DELETE` | `/api/orders/:id`               | 주문 취소      |
 | `GET`    | `/api/stocks/:id/chart?type=1m` | 차트 조회      |
 
+상세 API는 Swagger 참조
+
 ## Getting Started
 
 ### Prerequisites
