@@ -64,7 +64,118 @@ Realtime Server
 
 ### ERD
 
-<img width="872" height="975" alt="ERD" src="https://github.com/user-attachments/assets/a3659c97-4f8a-403a-8aed-2a879bd02bcf" />
+```mermaid
+erDiagram
+    USERS ||--o{ REFRESH_TOKENS : has
+    USERS ||--o{ ACCOUNTS : owns
+
+    ACCOUNTS ||--o{ USER_STOCKS : holds
+    STOCKS ||--o{ USER_STOCKS : held_by
+
+    ACCOUNTS ||--o{ ORDERS : places
+    STOCKS ||--o{ ORDERS : ordered
+    STOCKS ||--o{ CANDLES : has
+    STOCKS ||--o{ TRADES : traded
+
+    ORDERS ||--o{ ORDERS : targets
+    ORDERS ||--o{ TRADES : maker
+    ORDERS ||--o{ TRADES : taker
+
+    USERS {
+        int id PK
+        string username UK
+        string password
+        string email UK
+        Role role
+        datetime created_at
+    }
+
+    REFRESH_TOKENS {
+        int id PK
+        int user_id FK
+        string hashed_token
+    }
+
+    ACCOUNTS {
+        int id PK
+        int user_id FK
+        int account_number UK
+        bigint balance
+        bigint available_balance
+        AccountStatus status
+        datetime published_at
+        datetime created_at
+    }
+
+    STOCKS {
+        int id PK
+        string name UK
+        bigint price
+        bigint listing_price
+        StockStatus status
+        datetime published_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    USER_STOCKS {
+        int account_id PK, FK
+        int stock_id PK, FK
+        bigint quantity
+        bigint available_quantity
+        bigint average
+        bigint total_buy_amount
+    }
+
+    ORDERS {
+        bigint id PK
+        bigint target_id FK
+        int account_id FK
+        int stock_id FK
+        bigint price
+        bigint quantity
+        bigint filled_quantity
+        OrderType order_type
+        OrderStatus status
+        OrderRejectReason reject_reason
+        TradingType trading_type
+        datetime published_at
+        datetime created_at
+    }
+
+    TRADES {
+        bigint id PK
+        int stock_id FK
+        bigint price
+        bigint quantity
+        bigint maker_order_id FK
+        bigint taker_order_id FK
+        datetime matched_at
+    }
+
+    CANDLES {
+        int stock_id PK, FK
+        datetime candle_time PK
+        CandleType type PK
+        bigint open
+        bigint high
+        bigint low
+        bigint close
+        bigint volume
+    }
+
+    SNAPSHOTS {
+        bigint id PK
+        bytes state
+        bigint input_wal_index
+        datetime created_at
+    }
+
+    CURSORS {
+        CursorType type PK
+        bigint index
+    }
+```
 
 ## Core APIs
 
