@@ -179,12 +179,14 @@ erDiagram
 
 ## Core APIs
 
-| Method | Path                            | Description    |
-| ------ | ------------------------------- | -------------- |
-| `POST` | `/api/accounts`                 | 계좌 개설      |
-| `POST` | `/api/stocks/:id/orders/buy`    | 매수 주문 접수 |
-| `POST` | `/api/stocks/:id/orders/sell`   | 매도 주문 접수 |
-| `GET`  | `/api/stocks/:id/chart?type=1m` | 차트 조회      |
+| Method   | Path                            | Description    |
+| -------- | ------------------------------- | -------------- |
+| `POST`   | `/api/accounts`                 | 계좌 개설      |
+| `POST`   | `/api/stocks/:id/orders/buy`    | 매수 주문 접수 |
+| `POST`   | `/api/stocks/:id/orders/sell`   | 매도 주문 접수 |
+| `PUT`    | `/api/orders/:id`               | 주문 정정      |
+| `DELETE` | `/api/orders/:id`               | 주문 취소      |
+| `GET`    | `/api/stocks/:id/chart?type=1m` | 차트 조회      |
 
 ## Getting Started
 
