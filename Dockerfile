@@ -22,6 +22,8 @@ COPY prisma ./prisma/
 RUN npm ci
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 EXPOSE 3000
 
