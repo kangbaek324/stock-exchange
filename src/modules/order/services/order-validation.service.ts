@@ -41,6 +41,7 @@ export class OrderValidationService {
                 userId: true,
                 id: true,
                 balance: true,
+                availableBalance: true,
             },
         });
 
@@ -80,6 +81,19 @@ export class OrderValidationService {
                 if (dto.orderType === OrderType.LIMIT) {
                     await this.stockLimitService.limitSizeCheck(stockId, dto.price);
                 }
+
+                if (command.type === 'buy') {
+                    await this.validateBuyableBalance(
+                        account.availableBalance,
+                        stockId,
+                        dto.orderType,
+                        dto.price,
+                        dto.quantity,
+                    );
+                } else {
+                    await this.validateSellableStock(account.id, stockId, dto.quantity);
+                }
+
                 return { accountId: account.id, target: null };
             }
             case 'edit': {
@@ -111,6 +125,40 @@ export class OrderValidationService {
         if (!stock) throw new StockException('STOCK_NOT_FOUND');
         else if (stock.status !== StockStatus.LISTED)
             throw new StockException('STOCK_NOT_TRADABLE');
+    }
+
+    private async validateBuyableBalance(
+        availableBalance: bigint,
+        stockId: number,
+        orderType: OrderType,
+        price: number,
+        quantity: number,
+    ) {
+        const orderPrice =
+            orderType === OrderType.MARKET
+                ? await this.stockLimitService.getUpperLimit(stockId)
+                : BigInt(price);
+        const requiredBalance = orderPrice * BigInt(quantity);
+
+        if (availableBalance < requiredBalance) {
+            throw new OrderException('NOT_ENOUGH_MONEY');
+        }
+    }
+
+    private async validateSellableStock(accountId: number, stockId: number, quantity: number) {
+        const userStock = await this.prismaService.userStock.findUnique({
+            where: {
+                accountId_stockId: {
+                    accountId,
+                    stockId,
+                },
+            },
+            select: { availableQuantity: true },
+        });
+
+        if (!userStock || userStock.availableQuantity < BigInt(quantity)) {
+            throw new OrderException('NOT_ENOUGH_STOCK');
+        }
     }
 
     // 주문 정정 취소시 원주문 존재 + 소유권 + 수정 가능 상태 검증 후 주문 데이터 반환
