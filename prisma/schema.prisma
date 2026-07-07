@@ -20,7 +20,8 @@ enum TradingType {
 }
 
 enum CursorType {
-  EVENT
+  DB_APPLIED_OUTPUT_SEQ
+  MQ_PUBLISHED_OUTPUT_SEQ
 }
 
 enum OrderStatus {
@@ -115,11 +116,11 @@ model Stock {
   id           Int         @id @default(autoincrement())
   name         String      @unique @db.VarChar(30)
   price        BigInt      @db.UnsignedBigInt
-  listingPrice BigInt      @db.UnsignedBigInt @map("listing_price")
+  listingPrice BigInt      @map("listing_price") @db.UnsignedBigInt
   status       StockStatus @default(PENDING)
-  publishedAt DateTime?   @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime?   @updatedAt @map("updated_at")
+  publishedAt  DateTime?   @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime?   @updatedAt @map("updated_at")
 
   userStocks UserStock[]
   orders     Order[]
@@ -132,14 +133,14 @@ model Stock {
 
 // 캔들 (차트 봉 데이터)
 model Candle {
-  stockId    Int      @map("stock_id")
-  candleTime DateTime @map("candle_time")
+  stockId    Int        @map("stock_id")
+  candleTime DateTime   @map("candle_time")
   type       CandleType
-  open       BigInt   @db.UnsignedBigInt
-  high       BigInt   @db.UnsignedBigInt
-  low        BigInt   @db.UnsignedBigInt
-  close      BigInt   @db.UnsignedBigInt
-  volume     BigInt   @db.UnsignedBigInt
+  open       BigInt     @db.UnsignedBigInt
+  high       BigInt     @db.UnsignedBigInt
+  low        BigInt     @db.UnsignedBigInt
+  close      BigInt     @db.UnsignedBigInt
+  volume     BigInt     @db.UnsignedBigInt
 
   stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
 
@@ -147,7 +148,6 @@ model Candle {
   @@index([stockId, type, candleTime])
   @@map("candles")
 }
-
 
 // 주식 계좌(보유 종목) 정보
 model UserStock {
