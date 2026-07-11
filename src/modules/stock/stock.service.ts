@@ -113,7 +113,7 @@ export class StockService {
     // 상장된 주식 목록 조회 (상장 전 PENDING 제외)
     async getStockList() {
         const stocks = await this.prismaService.stock.findMany({
-            where: { status: { not: StockStatus.PENDING } },
+            where: { status: { equals: StockStatus.LISTED } },
             select: { id: true, name: true, price: true, status: true },
             orderBy: { id: 'asc' },
         });
