@@ -6,6 +6,7 @@ import { User } from '@prisma/client';
 import { JwtAuthGuard } from 'src/modules/auth/guard/jwt-auth.guard';
 import { OrderService } from '../services/order.service';
 
+// TODO: 시장가 주문일 경우 가격 Null로 저장하도록 수정
 @Controller('stocks/:id/orders')
 @UseGuards(JwtAuthGuard)
 export class StockOrderController {

@@ -31,6 +31,7 @@ enum OrderStatus {
   CANCELED // 주문 취소
   REPLACED // 정정 주문으로 대체되어 닫힘
   REJECTED // 거부됨
+  COMPLETED
 }
 
 enum OrderRejectReason {
@@ -39,7 +40,7 @@ enum OrderRejectReason {
   INSUFFICIENT_STOCK // 보유 수량 부족
   PRICE_OUT_OF_LIMIT // 상/하한가 벗어남
   STOCK_NOT_TRADABLE // 거래정지/상장폐지 종목
-  ALREADY_PROCESSED // 이미 처리(체결/취소)된 주문
+  ORDER_NOT_ACTIVE // 원본 주문이 없거나 이미 처리된 주문일 경우
 }
 
 enum Role {

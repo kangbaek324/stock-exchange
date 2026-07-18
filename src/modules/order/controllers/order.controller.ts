@@ -16,6 +16,7 @@ import { EditDto } from '../dto/edit.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guard/jwt-auth.guard';
 import { OrderService } from '../services/order.service';
 
+// TODO: 정정, 취소 주문일 경우 orderType null로 저장할것
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
 export class OrderController {
