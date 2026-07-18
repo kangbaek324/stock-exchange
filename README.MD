@@ -196,6 +196,7 @@ erDiagram
 
 - Node.js 20+
 - MySQL
+- Redis
 - RabbitMQ
 - npm
 
@@ -215,11 +216,16 @@ npm install
 SERVER_PORT=3000
 
 DATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/DATABASE"
+REDIS_URL="redis://USERNAME:PASSWORD@HOST:PORT/0"
 RABBITMQ_URL="amqp://USER:PASSWORD@HOST:PORT"
 
 ACCESS_TOKEN_SECRET="access-token-secret"
 REFRESH_TOKEN_SECRET="refresh-token-secret"
 ```
+
+`REDIS_URL` 하나에 사용자명, 비밀번호, 호스트, 포트, DB 번호를 설정합니다.
+TLS 연결이 필요하면 `redis://` 대신 `rediss://`를 사용합니다.
+사용자명이나 비밀번호에 URL 예약 문자가 포함되면 percent-encoding 해야 합니다.
 
 ### 3. Database Setup
 
