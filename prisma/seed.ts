@@ -139,7 +139,9 @@ async function seed() {
     console.log('\n시드 데이터 설정 완료');
 }
 
-seed().catch((err) => {
-    console.error(err);
-    process.exit(1);
-});
+seed()
+    .then(() => process.exit(0))
+    .catch((err) => {
+        console.error(err);
+        process.exit(1);
+    });
