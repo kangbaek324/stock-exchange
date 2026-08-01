@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { OrderStatus, OrderType, StockStatus, User } from '@prisma/client';
 import { AccountException } from 'src/modules/account/error/account.exception';
@@ -7,6 +9,7 @@ import { StockException } from 'src/modules/stock/error/stock.exception';
 import { GetOrderDto } from '../dto/get-order.dto';
 import { OrderCommand } from '../type/order-command.type';
 import { StockLimitService } from './stock-limit.service';
+import { RedisKeys } from 'src/common/redis/redis-keys';
 
 // 원주문 정보 (정정/취소)
 export type TargetOrder = {
@@ -27,11 +30,15 @@ export type ValidatedOrder = {
 // 정정/취소가 가능한(아직 종료되지 않은) 상태
 const MODIFIABLE_STATUSES: OrderStatus[] = [OrderStatus.RECEIVED, OrderStatus.OPEN];
 
+// NOTE: 현재 일반 계좌 검증과 같은 조회는 Redis 미사용 중 (주식 상태 및 잔고와 같은 데이터만 Redis 조회 중)
 @Injectable()
 export class OrderValidationService {
+    private readonly logger = new Logger(OrderValidationService.name);
+
     constructor(
         private readonly prismaService: PrismaService,
         private readonly stockLimitService: StockLimitService,
+        @InjectRedis() private readonly redis: Redis,
     ) {}
 
     async getAccount(accountNumber: number) {
@@ -84,6 +91,7 @@ export class OrderValidationService {
 
                 if (command.type === 'buy') {
                     await this.validateBuyableBalance(
+                        account.id,
                         account.availableBalance,
                         stockId,
                         dto.orderType,
@@ -115,8 +123,32 @@ export class OrderValidationService {
         }
     }
 
+    // Redis에서 해시 필드 조회
+    private async getCachedField(key: string, field: string): Promise<string | null> {
+        try {
+            return await this.redis.hget(key, field);
+        } catch (error) {
+            this.logger.warn(
+                `Redis 조회 실패 (key=${key}, field=${field})`,
+                error instanceof Error ? error.stack : error,
+            );
+            return null;
+        }
+    }
+
     // 거래 가능한 종목인지 검사
     private async isStockTradable(stockId: number) {
+        const cachedStatus = await this.getCachedField(
+            RedisKeys.stock(stockId),
+            'status',
+        );
+        if (cachedStatus != null) {
+            if (cachedStatus !== StockStatus.LISTED) {
+                throw new StockException('STOCK_NOT_TRADABLE');
+            }
+            return;
+        }
+
         const stock = await this.prismaService.stock.findUnique({
             where: { id: stockId },
             select: { status: true },
@@ -128,7 +160,8 @@ export class OrderValidationService {
     }
 
     private async validateBuyableBalance(
-        availableBalance: bigint,
+        accountId: number,
+        dbAvailableBalance: bigint,
         stockId: number,
         orderType: OrderType,
         price: number,
@@ -140,12 +173,35 @@ export class OrderValidationService {
                 : BigInt(price);
         const requiredBalance = orderPrice * BigInt(quantity);
 
+        const cachedBalance = await this.getCachedField(
+            RedisKeys.account(accountId),
+            'availableBalance',
+        );
+        const availableBalance =
+            cachedBalance != null ? BigInt(cachedBalance) : dbAvailableBalance;
+
         if (availableBalance < requiredBalance) {
             throw new OrderException('NOT_ENOUGH_MONEY');
         }
     }
 
-    private async validateSellableStock(accountId: number, stockId: number, quantity: number) {
+    private async validateSellableStock(
+        accountId: number,
+        stockId: number,
+        quantity: number,
+    ) {
+        const cachedQuantity = await this.getCachedField(
+            RedisKeys.holding(accountId, stockId),
+            'availableQuantity',
+        );
+
+        if (cachedQuantity != null) {
+            if (BigInt(cachedQuantity) < BigInt(quantity)) {
+                throw new OrderException('NOT_ENOUGH_STOCK');
+            }
+            return;
+        }
+
         const userStock = await this.prismaService.userStock.findUnique({
             where: {
                 accountId_stockId: {
@@ -166,7 +222,63 @@ export class OrderValidationService {
         orderId: string,
         accountId: number,
     ): Promise<TargetOrder> {
-        const order = await this.prismaService.order.findUnique({
+        const order =
+            (await this.getCachedOrder(orderId)) ??
+            (await this.fetchOrderFromDb(orderId));
+
+        if (!order) {
+            throw new OrderException('ORDER_NOT_FOUND');
+        } else if (order.accountId !== accountId) {
+            throw new OrderException('ORDER_FORBIDDEN');
+        } else if (!MODIFIABLE_STATUSES.includes(order.status)) {
+            throw new OrderException('ALREADY_PROCESSED_ORDER');
+        }
+
+        return order;
+    }
+
+    // rt:order 해시 조회. 정정/취소 검증에 필요한 필드가 모두 있어야 유효한 캐시로 인정
+    private async getCachedOrder(
+        orderId: string,
+    ): Promise<(TargetOrder & { status: OrderStatus }) | null> {
+        let raw: Record<string, string>;
+        try {
+            raw = await this.redis.hgetall(RedisKeys.order(orderId));
+        } catch (error) {
+            this.logger.warn(
+                `Redis 조회 실패 (orderId=${orderId})`,
+                error instanceof Error ? error.stack : error,
+            );
+            return null;
+        }
+
+        if (
+            raw.id == null ||
+            raw.accountId == null ||
+            raw.stockId == null ||
+            raw.price == null ||
+            raw.quantity == null ||
+            raw.orderType == null ||
+            raw.status == null
+        ) {
+            return null;
+        }
+
+        return {
+            id: BigInt(raw.id),
+            accountId: Number(raw.accountId),
+            stockId: Number(raw.stockId),
+            price: BigInt(raw.price),
+            quantity: BigInt(raw.quantity),
+            orderType: raw.orderType as OrderType,
+            status: raw.status as OrderStatus,
+        };
+    }
+
+    private async fetchOrderFromDb(
+        orderId: string,
+    ): Promise<(TargetOrder & { status: OrderStatus }) | null> {
+        return this.prismaService.order.findUnique({
             where: {
                 id: BigInt(orderId),
             },
@@ -180,15 +292,5 @@ export class OrderValidationService {
                 status: true,
             },
         });
-
-        if (!order) {
-            throw new OrderException('ORDER_NOT_FOUND');
-        } else if (order.accountId !== accountId) {
-            throw new OrderException('ORDER_FORBIDDEN');
-        } else if (!MODIFIABLE_STATUSES.includes(order.status)) {
-            throw new OrderException('ALREADY_PROCESSED_ORDER');
-        }
-
-        return order;
     }
 }
