@@ -7,6 +7,7 @@ import { StockException } from './error/stock.exception';
 import { StockDto } from './dto/stock.dto';
 import { StockMessage } from './type/stock-message.type';
 import { ADMIN_SERVICE } from 'src/common/messaging/messaging.module';
+import { StockLimitService } from '../order/services/stock-limit.service';
 
 // stock.list 발행에 필요한 필드
 const STOCK_MESSAGE_SELECT = {
@@ -31,6 +32,7 @@ export class StockService {
     constructor(
         @Inject(ADMIN_SERVICE) private client: ClientProxy,
         private readonly prismaService: PrismaService,
+        private readonly stockLimitService: StockLimitService,
     ) {}
 
     // 주식 상장
@@ -110,18 +112,30 @@ export class StockService {
         };
     }
 
-    // 상장된 주식 목록 조회 (상장 전 PENDING 제외)
+    // 상장된 주식 목록 조회 (상장 전 PENDING 제외, 등락률 내림차순)
     async getStockList() {
         const stocks = await this.prismaService.stock.findMany({
             where: { status: { not: StockStatus.PENDING } },
             select: { id: true, name: true, price: true, status: true },
-            orderBy: { id: 'asc' },
         });
 
-        return stocks.map((stock) => ({
-            ...stock,
-            price: stock.price.toString(),
-        }));
+        const withChangeRate = await Promise.all(
+            stocks.map(async (stock) => {
+                const prevClose = await this.stockLimitService.getPrevClose(stock.id);
+                const rate =
+                    prevClose && prevClose > 0n
+                        ? (Number(stock.price - prevClose) / Number(prevClose)) * 100
+                        : 0;
+
+                return {
+                    ...stock,
+                    price: stock.price.toString(),
+                    changeRate: Math.round(rate * 100) / 100,
+                };
+            }),
+        );
+
+        return withChangeRate.sort((a, b) => b.changeRate - a.changeRate);
     }
 
     // async getStockInfo(stockId: number) { ... }
