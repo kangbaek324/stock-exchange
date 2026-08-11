@@ -1,6 +1,6 @@
 import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { ChartService } from './chart.service';
-import { ChartType } from './type/chart-type';
+import { GetChartDto } from './dto/get-chart.dto';
 
 @Controller('/stocks')
 export class ChartController {
@@ -9,8 +9,8 @@ export class ChartController {
     @Get(':id/chart')
     getChart(
         @Param('id', ParseIntPipe) stockId: number,
-        @Query('type') type: ChartType,
+        @Query() query: GetChartDto,
     ) {
-        return this.chartService.getChart(stockId, type);
+        return this.chartService.getChart(stockId, query);
     }
 }
