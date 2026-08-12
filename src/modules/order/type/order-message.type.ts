@@ -11,4 +11,5 @@ export type OrderMessage = {
     filledQuantity: string;
     orderType: OrderType;
     tradingType: TradingType;
+    createdAt: string;
 };

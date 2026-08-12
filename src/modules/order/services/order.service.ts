@@ -21,6 +21,7 @@ const ORDER_MESSAGE_SELECT = {
     filledQuantity: true,
     orderType: true,
     tradingType: true,
+    createdAt: true,
 } satisfies Prisma.OrderSelect;
 
 type PersistedOrder = Prisma.OrderGetPayload<{ select: typeof ORDER_MESSAGE_SELECT }>;
@@ -190,6 +191,7 @@ export class OrderService {
             filledQuantity: order.filledQuantity.toString(),
             orderType: order.orderType,
             tradingType: order.tradingType,
+            createdAt: order.createdAt.toISOString(),
         };
     }
 
