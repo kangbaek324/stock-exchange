@@ -5,6 +5,7 @@ import { OrderModule } from './modules/order/order.module';
 import { AccountModule } from './modules/account/account.module';
 import { StockModule } from './modules/stock/stock.module';
 import { ChartModule } from './modules/chart/chart.module';
+import { RankingModule } from './modules/ranking/ranking.module';
 import { MessagingModule } from './common/messaging/messaging.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerMiddleware } from './middlewares/logger.middleware';
@@ -32,6 +33,7 @@ import { RedisModule } from '@nestjs-modules/ioredis';
         AccountModule,
         StockModule,
         ChartModule,
+        RankingModule,
     ],
 })
 export class AppModule {
