@@ -1,7 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { ClientProxy } from '@nestjs/microservices';
-import { OrderStatus, OrderType, Prisma, TradingType, User } from '@prisma/client';
+import {
+    CancelReason,
+    OrderStatus,
+    OrderType,
+    Prisma,
+    TradingType,
+    User,
+} from '@prisma/client';
 import { lastValueFrom, retry, timer } from 'rxjs';
 import { OrderValidationService, TargetOrder } from './order-validation.service';
 import { StockLimitService } from './stock-limit.service';
@@ -21,6 +28,7 @@ const ORDER_MESSAGE_SELECT = {
     filledQuantity: true,
     orderType: true,
     tradingType: true,
+    cancelReason: true,
     createdAt: true,
 } satisfies Prisma.OrderSelect;
 
@@ -125,6 +133,7 @@ export class OrderService {
                         filledQuantity: BigInt(0),
                         orderType: target.orderType,
                         tradingType: TradingType.CANCEL,
+                        cancelReason: CancelReason.USER,
                     },
                     select: ORDER_MESSAGE_SELECT,
                 });
