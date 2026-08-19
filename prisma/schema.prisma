@@ -19,6 +19,11 @@ enum TradingType {
   CANCEL
 }
 
+enum CancelReason {
+  USER // 사용자 요청에 의한 취소
+  SYSTEM // 시스템(휴장 정리 등)에 의한 강제 취소
+}
+
 enum CursorType {
   DB_APPLIED_OUTPUT_SEQ
   MQ_PUBLISHED_OUTPUT_SEQ
@@ -179,6 +184,7 @@ model Order {
   status         OrderStatus        @default(RECEIVED)
   rejectReason   OrderRejectReason? @map("reject_reason") // status=REJECTED일 때만
   tradingType    TradingType        @map("trading_type")
+  cancelReason   CancelReason?      @map("cancel_reason") // tradingType=CANCEL일 때만
   publishedAt    DateTime?          @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
   fullyFilledAt  DateTime?          @map("fully_filled_at") // 전량 체결 시각 (null = 미체결/부분체결)
   createdAt      DateTime           @default(now()) @map("created_at")
