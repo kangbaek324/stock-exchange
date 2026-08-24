@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { CandleType } from '@prisma/client';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { OrderException } from '../error/order.exception';
 import { getUtcMidnight } from 'src/common/helpers/get-utc-midnight';
@@ -42,30 +41,42 @@ export class StockLimitService {
     }
 
     // 전일 종가 반환
-    // NOTE: 상장 당일일 경우 당일 시가를 반환
-    // NOTE: 캔들이 전혀 없으면 stock.price 반환
     async getPrevClose(stockId: number): Promise<bigint | null> {
-        const prevDbCandle = await this.prismaService.candle.findFirst({
-            where: {
-                stockId,
-                type: CandleType.ONE_DAY,
-                candleTime: { lt: getUtcMidnight(0) },
-            },
-            orderBy: { candleTime: 'desc' },
-            select: { close: true },
+        // 전 거래일 마지막 거래 가격 조회
+        const todayMidnight = getUtcMidnight(0);
+        const lastTradeYesterday = await this.prismaService.trade.findFirst({
+            where: { stockId, matchedAt: { lt: todayMidnight } },
+            orderBy: { matchedAt: 'desc' },
+            select: { price: true },
         });
+        if (lastTradeYesterday?.price != null) return lastTradeYesterday.price;
 
-        if (prevDbCandle?.close != null) return prevDbCandle.close;
-
+        // 전 개래일 거래가 없을 경우 당일 시가 조회 (상장 당일)
         const todayFirstTrade = await this.prismaService.trade.findFirst({
-            where: { stockId, matchedAt: { gte: getUtcMidnight(0) } },
+            where: { stockId, matchedAt: { gte: todayMidnight } },
             orderBy: { matchedAt: 'asc' },
             select: { price: true },
         });
-
         if (todayFirstTrade?.price != null) return todayFirstTrade.price;
 
-        // 상장 당일이 거래 없음: listingPrice 반환
+        // 거래가 아예 없을 경우 (상장 당일 + 거래 없음)
+        const stock = await this.prismaService.stock.findUnique({
+            where: { id: stockId },
+            select: { listingPrice: true },
+        });
+        return stock?.listingPrice ?? null;
+    }
+
+    // 자정(UTC) 롤오버 스윕 전용 기준가
+    async getRolloverReferencePrice(stockId: number): Promise<bigint | null> {
+        const todayMidnight = getUtcMidnight(0);
+        const lastTradeYesterday = await this.prismaService.trade.findFirst({
+            where: { stockId, matchedAt: { lt: todayMidnight } },
+            orderBy: { matchedAt: 'desc' },
+            select: { price: true },
+        });
+        if (lastTradeYesterday?.price != null) return lastTradeYesterday.price;
+
         const stock = await this.prismaService.stock.findUnique({
             where: { id: stockId },
             select: { listingPrice: true },
