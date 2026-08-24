@@ -72,4 +72,22 @@ export class StockLimitService {
         });
         return stock?.listingPrice ?? null;
     }
+
+    // 자정(UTC) 롤오버 스윕 전용 기준가
+    async getRolloverReferencePrice(stockId: number): Promise<bigint | null> {
+        const todayMidnight = getUtcMidnight(0);
+
+        const lastTradeYesterday = await this.prismaService.trade.findFirst({
+            where: { stockId, matchedAt: { lt: todayMidnight } },
+            orderBy: { matchedAt: 'desc' },
+            select: { price: true },
+        });
+        if (lastTradeYesterday?.price != null) return lastTradeYesterday.price;
+
+        const stock = await this.prismaService.stock.findUnique({
+            where: { id: stockId },
+            select: { listingPrice: true },
+        });
+        return stock?.listingPrice ?? null;
+    }
 }

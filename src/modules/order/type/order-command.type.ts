@@ -7,4 +7,6 @@ export type OrderCommand =
     | { type: 'buy'; stockId: number; dto: BuyDto }
     | { type: 'sell'; stockId: number; dto: SellDto }
     | { type: 'edit'; orderId: string; dto: EditDto }
-    | { type: 'cancel'; orderId: string; dto: CancelDto };
+    | { type: 'cancel'; orderId: string; dto: CancelDto }
+    // NOTE: 내부 시스템 전용
+    | { type: 'system-cancel'; targetId: bigint };

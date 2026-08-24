@@ -32,7 +32,9 @@ const ORDER_MESSAGE_SELECT = {
     createdAt: true,
 } satisfies Prisma.OrderSelect;
 
-type PersistedOrder = Prisma.OrderGetPayload<{ select: typeof ORDER_MESSAGE_SELECT }>;
+export type PersistedOrder = Prisma.OrderGetPayload<{
+    select: typeof ORDER_MESSAGE_SELECT;
+}>;
 
 const PUBLISH_RETRY = {
     count: 3,
@@ -58,8 +60,10 @@ export class OrderService {
         private readonly stockLimitService: StockLimitService,
     ) {}
 
-    // 주문 생성
-    async createOrder(user: User, command: OrderCommand) {
+    async createOrder(
+        user: User,
+        command: Exclude<OrderCommand, { type: 'system-cancel' }>,
+    ) {
         const { accountId, target } = await this.orderValidation.validate(command, user);
         const order = await this.prismaService.retryWrite(() =>
             this.persistOrder(command, accountId, target),
@@ -137,11 +141,37 @@ export class OrderService {
                     },
                     select: ORDER_MESSAGE_SELECT,
                 });
+            case 'system-cancel':
+                return this.prismaService.order.create({
+                    data: {
+                        targetId: target.id,
+                        accountId,
+                        stockId: target.stockId,
+                        price: target.price,
+                        quantity: BigInt(0),
+                        filledQuantity: BigInt(0),
+                        orderType: target.orderType,
+                        tradingType: TradingType.CANCEL,
+                        cancelReason: CancelReason.SYSTEM,
+                    },
+                    select: ORDER_MESSAGE_SELECT,
+                });
         }
     }
 
+    // 상하한가 이탈 주문 정리(스윕)용: 시스템 취소 주문 생성 (검증 경로를 거치지 않고 직접 persistOrder 재사용)
+    async createSystemCancelOrder(target: TargetOrder): Promise<PersistedOrder> {
+        return this.prismaService.retryWrite(() =>
+            this.persistOrder(
+                { type: 'system-cancel', targetId: target.id },
+                target.accountId,
+                target,
+            ),
+        );
+    }
+
     // MQ에 주문 발행
-    private async publishAndMark(order: PersistedOrder) {
+    async publishAndMark(order: PersistedOrder) {
         // MQ로 주문 발행 후 확인 까지 대기
         try {
             await lastValueFrom(

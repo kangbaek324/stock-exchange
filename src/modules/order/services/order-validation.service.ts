@@ -65,7 +65,10 @@ export class OrderValidationService {
     }
 
     // 주문 유효성 검사 (매수, 매도, 정정, 취소)
-    async validate(command: OrderCommand, user: User): Promise<ValidatedOrder> {
+    async validate(
+        command: Exclude<OrderCommand, { type: 'system-cancel' }>,
+        user: User,
+    ): Promise<ValidatedOrder> {
         // 계좌 존재 및 소유권 검증
         const account = await this.getAccount(command.dto.accountNumber);
         if (account.userId !== user.id) {
