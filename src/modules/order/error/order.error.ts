@@ -51,6 +51,11 @@ export const OrderError = {
         status: HttpStatus.SERVICE_UNAVAILABLE,
         message: '주문 접수에 실패했습니다. 잠시 후 다시 시도해주세요.',
     },
+    MARKET_NOT_OPEN: {
+        code: 'ORDER_011',
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        message: '장 운영시간이 아닙니다.',
+    },
 } as const;
 
 export type OrderErrorKey = keyof typeof OrderError;

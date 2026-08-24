@@ -69,6 +69,12 @@ export class OrderValidationService {
         command: Exclude<OrderCommand, { type: 'system-cancel' }>,
         user: User,
     ): Promise<ValidatedOrder> {
+        // UTC 자정 롤오버 처리 중(00:00~00:05)에는 주문 불가
+        const now = new Date();
+        if (now.getUTCHours() === 0 && now.getUTCMinutes() < 5) {
+            throw new OrderException('MARKET_NOT_OPEN');
+        }
+
         // 계좌 존재 및 소유권 검증
         const account = await this.getAccount(command.dto.accountNumber);
         if (account.userId !== user.id) {
