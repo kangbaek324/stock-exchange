@@ -65,6 +65,20 @@ enum AccountStatus {
   ACTIVE // 활성
 }
 
+enum TransferStatus {
+  RECEIVED // 접수됨 (DB 기록 완료, 큐 적재 전)
+  REJECTED // 거부됨
+  COMPLETED // 송금 완료
+}
+
+enum TransferRejectReason {
+  INSUFFICIENT_BALANCE // 발신 계좌 잔액 부족
+  INVALID_RECIPIENT // 존재하지 않는 수신 계좌
+  SENDER_NOT_ACTIVE // 발신 계좌가 비활성 상태
+  RECIPIENT_NOT_ACTIVE // 수신 계좌가 비활성 상태
+  SELF_TRANSFER // 본인 계좌로 송금 시도
+}
+
 enum CandleType {
   ONE_MINUTE      @map("1m")
   FIVE_MINUTES    @map("5m")
@@ -113,8 +127,33 @@ model Account {
   userStocks UserStock[]
   orders     Order[]
 
+  transfersSent     Transfer[] @relation("TransferSender")
+  transfersReceived Transfer[] @relation("TransferRecipient")
+
   @@index([publishedAt]) // 릴레이가 미발행 계좌 스캔
   @@map("accounts")
+}
+
+// 계좌 간 송금
+model Transfer {
+  id                 BigInt                @id @default(autoincrement())
+  senderAccountId    Int                   @map("sender_account_id")
+  recipientAccountId Int                   @map("recipient_account_id")
+  senderAlias        String?               @map("sender_alias") @db.VarChar(20) // 수신자에게 보이는 발신자 커스텀 이름
+  amount             BigInt                @db.UnsignedBigInt
+  status             TransferStatus        @default(RECEIVED)
+  rejectReason       TransferRejectReason? @map("reject_reason") // status=REJECTED일 때만
+  publishedAt        DateTime?             @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
+  completedAt        DateTime?             @map("completed_at") // 송금 완료 시각 (status=COMPLETED일 때만)
+  createdAt          DateTime              @default(now()) @map("created_at")
+
+  senderAccount    Account @relation("TransferSender", fields: [senderAccountId], references: [id])
+  recipientAccount Account @relation("TransferRecipient", fields: [recipientAccountId], references: [id])
+
+  @@index([publishedAt]) // 릴레이가 미발행 송금 스캔
+  @@index([senderAccountId, createdAt])
+  @@index([recipientAccountId, createdAt])
+  @@map("transfers")
 }
 
 // 주식 정보
