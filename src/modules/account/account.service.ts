@@ -28,6 +28,7 @@ const TRANSFER_MESSAGE_SELECT = {
     senderAccountId: true,
     recipientAccountId: true,
     amount: true,
+    senderAlias: true,
 } satisfies Prisma.TransferSelect;
 
 type PublishableTransfer = Prisma.TransferGetPayload<{
@@ -219,6 +220,7 @@ export class AccountService {
                 senderAccountId: sender.id,
                 recipientAccountId: recipient.id,
                 amount,
+                senderAlias: dto.senderAlias,
             },
             select: TRANSFER_MESSAGE_SELECT,
         });
