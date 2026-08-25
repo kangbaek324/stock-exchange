@@ -9,6 +9,7 @@ import { OrderCommand } from '../type/order-command.type';
 import { StockLimitService } from './stock-limit.service';
 import { RedisKeys } from 'src/common/redis/redis-keys';
 import { RedisCacheService } from 'src/common/redis/redis-cache.service';
+import { AccountService } from 'src/modules/account/account.service';
 
 export type TargetOrder = {
     id: bigint;
@@ -29,10 +30,11 @@ export class OrderValidationService {
         private readonly prismaService: PrismaService,
         private readonly stockLimitService: StockLimitService,
         private readonly redisCacheService: RedisCacheService,
+        private readonly accountService: AccountService,
     ) {}
 
     async getOrderValidate(query: GetOrderDto, user: User) {
-        const account = await this.getAccount(query.accountnumber);
+        const account = await this.accountService.getAccount(query.accountnumber);
 
         if (account.userId !== user.id) {
             throw new AccountException('ACCOUNT_FORBIDDEN');
@@ -51,7 +53,7 @@ export class OrderValidationService {
         }
 
         // 계좌 존재 및 소유권 검증
-        const account = await this.getAccount(command.dto.accountNumber);
+        const account = await this.accountService.getAccount(command.dto.accountNumber);
         if (account.userId !== user.id) {
             throw new AccountException('ACCOUNT_FORBIDDEN');
         }
@@ -75,7 +77,6 @@ export class OrderValidationService {
 
                 if (command.type === 'buy') {
                     await this.validateBuyableBalance(
-                        account.id,
                         account.availableBalance,
                         stockId,
                         dto.orderType,
@@ -133,8 +134,7 @@ export class OrderValidationService {
 
     // 계좌 주식 보유 잔고 검사
     private async validateBuyableBalance(
-        accountId: number,
-        dbAvailableBalance: bigint,
+        availableBalance: bigint,
         stockId: number,
         orderType: OrderType,
         price: number,
@@ -145,13 +145,6 @@ export class OrderValidationService {
                 ? await this.stockLimitService.getUpperLimit(stockId)
                 : BigInt(price);
         const requiredBalance = orderPrice * BigInt(quantity);
-
-        const cachedBalance = await this.redisCacheService.getField(
-            RedisKeys.account(accountId),
-            'availableBalance',
-        );
-        const availableBalance =
-            cachedBalance != null ? BigInt(cachedBalance) : dbAvailableBalance;
 
         if (availableBalance < requiredBalance) {
             throw new OrderException('NOT_ENOUGH_MONEY');
@@ -256,20 +249,5 @@ export class OrderValidationService {
                 status: true,
             },
         });
-    }
-
-    private async getAccount(accountNumber: number) {
-        const account = await this.prismaService.account.findUnique({
-            where: { accountNumber: accountNumber },
-            select: {
-                userId: true,
-                id: true,
-                balance: true,
-                availableBalance: true,
-            },
-        });
-
-        if (!account) throw new AccountException('ACCOUNT_NOT_FOUND');
-        else return account;
     }
 }

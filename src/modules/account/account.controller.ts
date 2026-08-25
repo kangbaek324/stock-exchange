@@ -1,8 +1,17 @@
-import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Get,
+    Param,
+    ParseIntPipe,
+    Post,
+    UseGuards,
+} from '@nestjs/common';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { AccountService } from './account.service';
 import { User } from '@prisma/client';
 import { JwtAuthGuard } from 'src/modules/auth/guard/jwt-auth.guard';
+import { CreateTransferDto } from './dto/create-transfer.dto';
 
 @Controller('accounts')
 @UseGuards(JwtAuthGuard)
@@ -19,14 +28,14 @@ export class AccountController {
         return await this.accountService.createAccount(user);
     }
 
-    // @Post('/:accountNumber/transfer')
-    // async transferAccountBalance(
-    //     @GetUser() user: User,
-    //     @Param('accountNumber', ParseIntPipe) accountNumber: number,
-    //     @Body() dto: TransferAccountBalanceDto,
-    // ) {
-    //     return await this.accountService.transferAccountBalance(user, dto, accountNumber);
-    // }
+    @Post('/:senderAccountNumber/transfer')
+    async createTransfer(
+        @GetUser() user: User,
+        @Param('senderAccountNumber', ParseIntPipe) senderAccountNumber: number,
+        @Body() dto: CreateTransferDto,
+    ) {
+        return await this.accountService.createTransfer(user, dto, senderAccountNumber);
+    }
 
     // ADMIN //
 

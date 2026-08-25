@@ -15,10 +15,10 @@ export class OrderPublishRelay {
         if (this.running) return;
         this.running = true;
         try {
-            await this.orderService.republishPending();
+            await this.orderService.republishPendingOrders();
         } catch (err) {
             this.logger.error(
-                '미발행 주문 재발행 실패',
+                'Failed to republish unpublished orders',
                 err instanceof Error ? err.stack : err,
             );
         } finally {

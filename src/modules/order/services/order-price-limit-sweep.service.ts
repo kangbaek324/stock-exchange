@@ -12,6 +12,7 @@ const TARGET_ORDER_SELECT = {
     accountId: true,
     stockId: true,
     price: true,
+    status: true,
     quantity: true,
     orderType: true,
 } as const;
@@ -54,7 +55,7 @@ export class OrderPriceLimitSweepService {
         }
 
         for (const order of createdOrders) {
-            await this.orderService.publishAndMark(order);
+            await this.orderService.publishOrderAndMark(order);
         }
 
         this.logger.log(

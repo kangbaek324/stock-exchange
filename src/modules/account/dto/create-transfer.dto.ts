@@ -1,6 +1,6 @@
 import { IsInt, Max, Min } from 'class-validator';
 
-export class TransferAccountBalanceDto {
+export class CreateTransferDto {
     @IsInt()
     @Min(1)
     @Max(1000000000000)
@@ -8,6 +8,5 @@ export class TransferAccountBalanceDto {
 
     @IsInt()
     @Min(1)
-    @Max(99999)
-    toAccountNumber: number;
+    recipientAccountNumber: number;
 }

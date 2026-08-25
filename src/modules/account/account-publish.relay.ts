@@ -15,10 +15,10 @@ export class AccountPublishRelay {
         if (this.running) return;
         this.running = true;
         try {
-            await this.accountService.republishPending();
+            await this.accountService.republishPendingAccounts();
         } catch (err) {
             this.logger.error(
-                '미발행 계좌 재발행 실패',
+                'Failed to republish unpublished accounts',
                 err instanceof Error ? err.stack : err,
             );
         } finally {

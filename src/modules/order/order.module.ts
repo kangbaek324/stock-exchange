@@ -7,8 +7,10 @@ import { StockLimitService } from './services/stock-limit.service';
 import { OrderPublishRelay } from './services/order-publish.relay';
 import { OrderPriceLimitSweepService } from './services/order-price-limit-sweep.service';
 import { OrderPriceLimitSweepRelay } from './services/order-price-limit-sweep.relay';
+import { AccountModule } from '../account/account.module';
 
 @Module({
+    imports: [AccountModule],
     controllers: [OrderController, StockOrderController],
     providers: [
         OrderService,
