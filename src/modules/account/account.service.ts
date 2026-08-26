@@ -7,6 +7,7 @@ import { AccountMessage } from './type/account-message.type';
 import { TransferMessage } from './type/transfer-message.type';
 import { DATA_SERVICE } from 'src/common/messaging/messaging.module';
 import { CreateTransferDto } from './dto/create-transfer.dto';
+import { GetTransferDto, TransferDirection, TransferSort } from './dto/get-transfer.dto';
 import { AccountException } from './error/account.exception';
 import { RedisCacheService } from 'src/common/redis/redis-cache.service';
 import { RedisKeys } from 'src/common/redis/redis-keys';
@@ -33,6 +34,24 @@ const TRANSFER_MESSAGE_SELECT = {
 
 type PublishableTransfer = Prisma.TransferGetPayload<{
     select: typeof TRANSFER_MESSAGE_SELECT;
+}>;
+
+// 송금 내역 조회 응답에 필요한 필드
+const TRANSFER_HISTORY_SELECT = {
+    id: true,
+    senderAccountId: true,
+    senderAlias: true,
+    amount: true,
+    status: true,
+    rejectReason: true,
+    completedAt: true,
+    createdAt: true,
+    senderAccount: { select: { accountNumber: true } },
+    recipientAccount: { select: { accountNumber: true } },
+} satisfies Prisma.TransferSelect;
+
+type TransferHistory = Prisma.TransferGetPayload<{
+    select: typeof TRANSFER_HISTORY_SELECT;
 }>;
 
 const PUBLISH_RETRY = {
@@ -232,6 +251,85 @@ export class AccountService {
             senderAccountId: transfer.senderAccountId,
             recipientAccountId: transfer.recipientAccountId,
             amount: transfer.amount.toString(),
+        };
+    }
+
+    // 계좌 송금 내역 조회
+    async getTransferList(user: User, dto: GetTransferDto, accountNumber: number) {
+        const accountId = await this.getOwnedAccountId(user, accountNumber);
+
+        const where: Prisma.TransferWhereInput = {
+            ...this.buildDirectionFilter(accountId, dto.direction),
+        };
+
+        const sortOrder: Prisma.SortOrder =
+            dto.sort === TransferSort.OLDEST ? 'asc' : 'desc';
+
+        const [total, transfers] = await Promise.all([
+            this.prismaService.transfer.count({ where }),
+            this.prismaService.transfer.findMany({
+                where,
+                select: TRANSFER_HISTORY_SELECT,
+                orderBy: [{ createdAt: sortOrder }, { id: sortOrder }],
+                skip: (dto.page - 1) * dto.limit,
+                take: dto.limit,
+            }),
+        ]);
+
+        return {
+            total,
+            page: dto.page,
+            limit: dto.limit,
+            totalPages: Math.ceil(total / dto.limit),
+            hasNext: dto.page * dto.limit < total,
+            items: transfers.map((transfer) =>
+                this.toTransferHistory(transfer, accountId),
+            ),
+        };
+    }
+
+    // 소유권 검증 후 계좌 반환 (잔액 없는 ID 조회용)
+    private async getOwnedAccountId(user: User, accountNumber: number) {
+        const account = await this.prismaService.account.findUnique({
+            where: { accountNumber },
+            select: { id: true, userId: true },
+        });
+        if (!account) throw new AccountException('ACCOUNT_NOT_FOUND');
+        if (account.userId !== user.id) throw new AccountException('ACCOUNT_FORBIDDEN');
+
+        return account.id;
+    }
+
+    private buildDirectionFilter(
+        accountId: number,
+        direction?: TransferDirection,
+    ): Prisma.TransferWhereInput {
+        if (direction === TransferDirection.SENT) return { senderAccountId: accountId };
+        if (direction === TransferDirection.RECEIVED) {
+            return { recipientAccountId: accountId };
+        }
+
+        return {
+            OR: [{ senderAccountId: accountId }, { recipientAccountId: accountId }],
+        };
+    }
+
+    private toTransferHistory(transfer: TransferHistory, accountId: number) {
+        const isSender = transfer.senderAccountId === accountId;
+
+        return {
+            id: transfer.id.toString(),
+            direction: isSender ? TransferDirection.SENT : TransferDirection.RECEIVED,
+            amount: transfer.amount.toString(),
+            status: transfer.status,
+            rejectReason: transfer.rejectReason,
+            senderAccountNumber: transfer.senderAccount.accountNumber,
+            recipientAccountNumber: transfer.recipientAccount.accountNumber,
+            // 발신자가 지정한 커스텀 이름 (없으면 계좌번호로 표시)
+            senderName:
+                transfer.senderAlias ?? String(transfer.senderAccount.accountNumber),
+            completedAt: transfer.completedAt,
+            createdAt: transfer.createdAt,
         };
     }
 
