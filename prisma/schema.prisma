@@ -74,9 +74,11 @@ enum TransferStatus {
 enum TransferRejectReason {
   INSUFFICIENT_BALANCE // 발신 계좌 잔액 부족
   INVALID_RECIPIENT // 존재하지 않는 수신 계좌
+  INVALID_SENDER // 존재하지 않는 발신 계좌
   SENDER_NOT_ACTIVE // 발신 계좌가 비활성 상태
   RECIPIENT_NOT_ACTIVE // 수신 계좌가 비활성 상태
   SELF_TRANSFER // 본인 계좌로 송금 시도
+  INVALID_REQUEST
 }
 
 enum CandleType {
