@@ -68,7 +68,7 @@ export class OrderService {
         const order = await this.prismaService.retryWrite(() =>
             this.persistOrder(command, accountId, target),
         );
-        await this.publishAndMark(order);
+        await this.publishOrderAndMark(order);
 
         return {
             message: '주문이 접수되었습니다.',
@@ -171,18 +171,18 @@ export class OrderService {
     }
 
     // MQ에 주문 발행
-    async publishAndMark(order: PersistedOrder) {
+    async publishOrderAndMark(order: PersistedOrder) {
         // MQ로 주문 발행 후 확인 까지 대기
         try {
             await lastValueFrom(
                 this.client
-                    .emit('order.created', this.toMessage(order))
+                    .emit('order.created', this.toOrderMessage(order))
                     .pipe(retry(PUBLISH_RETRY)),
             );
         } catch (err) {
             // 실패시 별도 릴레이가 처리
             this.logger.warn(
-                `order.created 발행 실패 (orderId=${order.id})`,
+                `Failed to publish order.created (orderId=${order.id})`,
                 err instanceof Error ? err.stack : err,
             );
             return;
@@ -199,7 +199,7 @@ export class OrderService {
 
     // 릴레이용: 아직 큐 적재 안 된(RECEIVED·publishedAt=null) 주문을 재발행
     // in-flight 요청과의 경합을 피하려 생성 후 일정 시간 지난 것만 대상으로 함
-    async republishPending() {
+    async republishPendingOrders() {
         // 팬딩 주문 조회
         const pending = await this.prismaService.order.findMany({
             where: {
@@ -214,12 +214,12 @@ export class OrderService {
 
         // 주문 발행
         for (const order of pending) {
-            await this.publishAndMark(order);
+            await this.publishOrderAndMark(order);
         }
     }
 
     // BigInt 필드를 string으로 변환해 JSON 직렬화 가능한 메시지로 변환
-    private toMessage(order: PersistedOrder): OrderMessage {
+    private toOrderMessage(order: PersistedOrder): OrderMessage {
         return {
             id: order.id.toString(),
             targetId: order.targetId?.toString() ?? null,

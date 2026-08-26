@@ -61,20 +61,20 @@ export class StockService {
             return created;
         });
 
-        await this.publishAndMark(stock);
+        await this.publishStockAndMark(stock);
     }
 
     // MQ에 stock.list 발행 후 성공시 마킹
-    private async publishAndMark(stock: PublishableStock) {
+    private async publishStockAndMark(stock: PublishableStock) {
         try {
             await lastValueFrom(
                 this.client
-                    .emit('stock.list', this.toMessage(stock))
+                    .emit('stock.list', this.toStockMessage(stock))
                     .pipe(retry(PUBLISH_RETRY)),
             );
         } catch (err) {
             this.logger.warn(
-                `stock.list 발행 실패 (stockId=${stock.id})`,
+                `Failed to publish stock.list (stockId=${stock.id})`,
                 err instanceof Error ? err.stack : err,
             );
             return;
@@ -87,7 +87,7 @@ export class StockService {
     }
 
     // 릴레이용: 아직 큐 적재 안 된(PENDING·publishedAt=null) 주식을 재발행
-    async republishPending() {
+    async republishPendingStocks() {
         const pending = await this.prismaService.stock.findMany({
             where: {
                 publishedAt: null,
@@ -100,11 +100,11 @@ export class StockService {
         });
 
         for (const stock of pending) {
-            await this.publishAndMark(stock);
+            await this.publishStockAndMark(stock);
         }
     }
 
-    private toMessage(stock: PublishableStock): StockMessage {
+    private toStockMessage(stock: PublishableStock): StockMessage {
         return {
             id: stock.id.toString(),
             price: stock.price.toString(),

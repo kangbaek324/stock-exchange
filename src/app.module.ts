@@ -12,6 +12,7 @@ import { LoggerMiddleware } from './middlewares/logger.middleware';
 import { AppController } from './app.controller';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RedisModule } from '@nestjs-modules/ioredis';
+import { RedisCacheModule } from './common/redis/redis-cache.module';
 
 @Module({
     controllers: [AppController],
@@ -26,6 +27,7 @@ import { RedisModule } from '@nestjs-modules/ioredis';
             }),
         }),
         ScheduleModule.forRoot(),
+        RedisCacheModule,
         MessagingModule,
         AuthModule,
         PrismaModule,
