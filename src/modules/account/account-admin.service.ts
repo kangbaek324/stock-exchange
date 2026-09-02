@@ -10,6 +10,7 @@ import { WithdrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
 import { DepositStockDto } from './dto/deposit-stock.dto';
 import { WithdrawStockDto } from './dto/withdraw-stock.dto';
 import { AdminBalanceAdjustMessage } from './type/admin-balance-message.type';
+import { AccountAdminException } from './error/account.exception';
 
 // admin.account.balance.adjust 발행에 필요한 필드
 const ADMIN_BALANCE_REQUEST_SELECT = {
@@ -56,9 +57,11 @@ export class AccountAdminService {
         dto: DepositAccountBalanceDto,
         accountNumber: number,
     ) {
+        const account = await this.accountService.getAccount(accountNumber);
+
         return this.createBalanceAdjustRequest(
             user,
-            accountNumber,
+            account.id,
             dto.amount,
             AdminRequestType.ACCOUNT_DEPOSIT,
         );
@@ -70,9 +73,14 @@ export class AccountAdminService {
         dto: WithdrawAccountBalanceDto,
         accountNumber: number,
     ) {
+        const account = await this.accountService.getAccountWithBalance(accountNumber);
+        if (account.availableBalance < dto.amount) {
+            throw new AccountAdminException('INSUFFICIENT_BALANCE');
+        }
+
         return this.createBalanceAdjustRequest(
             user,
-            accountNumber,
+            account.id,
             dto.amount,
             AdminRequestType.ACCOUNT_WITHDRAW,
         );
@@ -80,15 +88,13 @@ export class AccountAdminService {
 
     private async createBalanceAdjustRequest(
         user: User,
-        accountNumber: number,
+        accountId: number,
         amount: number,
         type:
             | typeof AdminRequestType.ACCOUNT_DEPOSIT
             | typeof AdminRequestType.ACCOUNT_WITHDRAW,
     ) {
-        const account = await this.accountService.getAccount(accountNumber);
-
-        const payload: AccountBalancePayload = { accountId: account.id, amount };
+        const payload: AccountBalancePayload = { accountId, amount };
 
         const request = await this.prismaService.adminRequest.create({
             data: {

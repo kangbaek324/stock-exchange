@@ -23,4 +23,13 @@ export const AccountError = {
     },
 } as const;
 
+export const AccountAdminError = {
+    INSUFFICIENT_BALANCE: {
+        code: 'ACCOUNT_ADMIN_001',
+        status: HttpStatus.CONFLICT,
+        message: '계좌 잔액이 충분하지 않습니다.',
+    },
+} as const;
+
 export type AccountErrorKey = keyof typeof AccountError;
+export type AccountAdminErrorKey = keyof typeof AccountAdminError;
