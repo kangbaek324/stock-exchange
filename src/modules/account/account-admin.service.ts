@@ -140,19 +140,13 @@ export class AccountAdminService {
         });
     }
 
-    // 릴레이용: 아직 큐 적재 안 된(RECEIVED·publishedAt=null) 계좌 잔고 요청을 재발행
+    // 릴레이용: 아직 큐 적재 안 된(RECEIVED·publishedAt=null) AdminRequest를 재발행
     // in-flight 요청과의 경합을 피하려 생성 후 일정 시간 지난 것만 대상으로 함
-    async republishPendingAdminBalanceRequests() {
+    async republishPendingAdminRequests() {
         const pending = await this.prismaService.adminRequest.findMany({
             where: {
                 publishedAt: null,
                 status: AdminRequestStatus.RECEIVED,
-                type: {
-                    in: [
-                        AdminRequestType.ACCOUNT_DEPOSIT,
-                        AdminRequestType.ACCOUNT_WITHDRAW,
-                    ],
-                },
                 createdAt: { lt: new Date(Date.now() - 2000) },
             },
             select: ADMIN_BALANCE_REQUEST_SELECT,

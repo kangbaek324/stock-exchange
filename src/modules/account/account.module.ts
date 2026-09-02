@@ -5,7 +5,7 @@ import { AccountService } from './account.service';
 import { AccountAdminService } from './account-admin.service';
 import { AccountPublishRelay } from './account-publish.relay';
 import { TransferPublishRelay } from './transfer-publish.relay';
-import { AdminBalancePublishRelay } from './admin-balance-publish.relay';
+import { AdminRequestPublishRelay } from './admin-request-publish.relay';
 
 @Module({
     controllers: [AccountController, AccountAdminController],
@@ -14,7 +14,7 @@ import { AdminBalancePublishRelay } from './admin-balance-publish.relay';
         AccountAdminService,
         AccountPublishRelay,
         TransferPublishRelay,
-        AdminBalancePublishRelay,
+        AdminRequestPublishRelay,
     ],
     exports: [AccountService],
 })
