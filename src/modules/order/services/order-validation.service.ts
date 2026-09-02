@@ -53,7 +53,9 @@ export class OrderValidationService {
         }
 
         // 계좌 존재 및 소유권 검증
-        const account = await this.accountService.getAccount(command.dto.accountNumber);
+        const account = await this.accountService.getAccountWithBalance(
+            command.dto.accountNumber,
+        );
         if (account.userId !== user.id) {
             throw new AccountException('ACCOUNT_FORBIDDEN');
         }

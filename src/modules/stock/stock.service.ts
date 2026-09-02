@@ -1,10 +1,11 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import { Prisma, StockStatus } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, retry, timer } from 'rxjs';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { StockException } from './error/stock.exception';
 import { StockDto } from './dto/stock.dto';
+import { StockStatusDto } from './dto/stock-status.dto';
 import { StockMessage } from './type/stock-message.type';
 import { ADMIN_SERVICE } from 'src/common/messaging/messaging.module';
 import { StockLimitService } from '../order/services/stock-limit.service';
@@ -139,5 +140,14 @@ export class StockService {
     }
 
     // async getStockInfo(stockId: number) { ... }
-    // async updateStockStatus(dto: StockStatusDto, stockId: number) { ... }
+
+    // Admin
+
+    // 종목 상태 변경
+    // TODO: 엔진/데이터 서비스 연동 방식 확정 후 구현 (ADMIN_SERVICE 큐 발행 등)
+    async updateStockStatus(dto: StockStatusDto, stockId: number) {
+        void dto;
+        void stockId;
+        throw new NotImplementedException();
+    }
 }

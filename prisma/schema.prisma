@@ -8,8 +8,8 @@ datasource db {
 }
 
 enum OrderType {
-  LIMIT // 지정가
-  MARKET // 시장가
+  LIMIT
+  MARKET
 }
 
 enum TradingType {
@@ -33,18 +33,17 @@ enum OrderStatus {
   RECEIVED // 접수됨 (DB 기록 완료, 큐 적재 전)
   OPEN // 큐 적재 성공 (엔진으로 전달된 활성 주문)
   FILLED // 완전 체결되어 종료
-  CANCELED // 주문 취소
+  CANCELED // 주문이 취소되어 닫힘
   REPLACED // 정정 주문으로 대체되어 닫힘
   REJECTED // 거부됨
-  COMPLETED
+  COMPLETED // 요청한 주문을 처리함 (EDIT, CANCLE만 해당)
 }
 
 enum OrderRejectReason {
   INVALID_ORDER // 잘못된 주문
   INSUFFICIENT_BALANCE // 예수금 부족
   INSUFFICIENT_STOCK // 보유 수량 부족
-  PRICE_OUT_OF_LIMIT // 상/하한가 벗어남
-  STOCK_NOT_TRADABLE // 거래정지/상장폐지 종목
+  STOCK_NOT_TRADABLE // 거래 불가능 한 종목일 경우 (거래정지/상장폐지 등등..)
   ORDER_NOT_ACTIVE // 원본 주문이 없거나 이미 처리된 주문일 경우
 }
 
@@ -54,19 +53,19 @@ enum Role {
 }
 
 enum StockStatus {
-  PENDING // 상장 전
+  PENDING // 상장 전 (엔진 처리 대기)
   LISTED // 상장
   SUSPENDED // 거래 정지
   DELISTED // 상장 폐지
 }
 
 enum AccountStatus {
-  PENDING // 대기
+  PENDING // 대기 (엔진 처리 대기)
   ACTIVE // 활성
 }
 
 enum TransferStatus {
-  RECEIVED // 접수됨 (DB 기록 완료, 큐 적재 전)
+  RECEIVED // 접수됨 (엔진 처리 대기)
   REJECTED // 거부됨
   COMPLETED // 송금 완료
 }
@@ -81,6 +80,30 @@ enum TransferRejectReason {
   INVALID_REQUEST
 }
 
+enum AdminRequestType {
+  STOCK_SUSPEND // 거래 정지
+  STOCK_RESUME // 거래 재개
+  STOCK_DELIST // 상장 폐지
+  ACCOUNT_DEPOSIT // 입금
+  ACCOUNT_WITHDRAW // 출금
+  STOCK_DEPOSIT // 주식 입고
+  STOCK_WITHDRAW // 주식 출고
+}
+
+enum AdminRequestStatus {
+  RECEIVED // 접수됨 (엔진 처리 대기)
+  COMPLETED // 엔진 처리 완료
+  REJECTED // 거부됨
+}
+
+enum AdminRequestRejectReason {
+  TARGET_NOT_FOUND // 대상(주식/계좌/주문) 없음
+  INVALID_STATE // 대상 상태가 명령과 불일치 (예: 이미 상장폐지)
+  INSUFFICIENT_BALANCE // 출금시 잔고 부족
+  INSUFFICIENT_STOCK // 주식 출고식 잔고 부족
+  INVALID_REQUEST
+}
+
 enum CandleType {
   ONE_MINUTE      @map("1m")
   FIVE_MINUTES    @map("5m")
@@ -89,6 +112,9 @@ enum CandleType {
   ONE_HOUR        @map("1h")
   ONE_DAY         @map("1d")
 }
+
+// NOTE: 테이블 필드 중에서 PublishedAt, CompletedAt은
+// 큐에 Publish된 시각, 엔진이 요청을 처리한 시각을 의미합니다.
 
 model User {
   id        Int      @id @default(autoincrement())
@@ -100,6 +126,7 @@ model User {
 
   accounts      Account[]
   refreshTokens RefreshToken[]
+  adminRequests AdminRequest[]
 
   @@map("users")
 }
@@ -122,7 +149,7 @@ model Account {
   balance          BigInt        @db.UnsignedBigInt
   availableBalance BigInt        @map("available_balance") @db.UnsignedBigInt
   status           AccountStatus @default(PENDING)
-  publishedAt      DateTime?     @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
+  publishedAt      DateTime?     @map("published_at")
   createdAt        DateTime      @default(now()) @map("created_at")
 
   user       User        @relation(fields: [userId], references: [id])
@@ -132,7 +159,7 @@ model Account {
   transfersSent     Transfer[] @relation("TransferSender")
   transfersReceived Transfer[] @relation("TransferRecipient")
 
-  @@index([publishedAt]) // 릴레이가 미발행 계좌 스캔
+  @@index([publishedAt])
   @@map("accounts")
 }
 
@@ -144,18 +171,38 @@ model Transfer {
   senderAlias        String?               @map("sender_alias") @db.VarChar(20) // 수신자에게 보이는 발신자 커스텀 이름
   amount             BigInt                @db.UnsignedBigInt
   status             TransferStatus        @default(RECEIVED)
-  rejectReason       TransferRejectReason? @map("reject_reason") // status=REJECTED일 때만
-  publishedAt        DateTime?             @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
-  completedAt        DateTime?             @map("completed_at") // 송금 완료 시각 (status=COMPLETED일 때만)
+  rejectReason       TransferRejectReason? @map("reject_reason")
+  publishedAt        DateTime?             @map("published_at")
+  completedAt        DateTime?             @map("completed_at")
   createdAt          DateTime              @default(now()) @map("created_at")
 
   senderAccount    Account @relation("TransferSender", fields: [senderAccountId], references: [id])
   recipientAccount Account @relation("TransferRecipient", fields: [recipientAccountId], references: [id])
 
-  @@index([publishedAt]) // 릴레이가 미발행 송금 스캔
+  @@index([publishedAt])
   @@index([senderAccountId, createdAt])
   @@index([recipientAccountId, createdAt])
   @@map("transfers")
+}
+
+// 어드민 요청
+model AdminRequest {
+  id           BigInt                    @id @default(autoincrement())
+  type         AdminRequestType
+  payload      Json
+  status       AdminRequestStatus        @default(RECEIVED)
+  rejectReason AdminRequestRejectReason? @map("reject_reason")
+
+  requestedBy Int       @map("requested_by")
+  publishedAt DateTime? @map("published_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  requester User @relation(fields: [requestedBy], references: [id])
+
+  @@index([publishedAt])
+  @@index([type, status, createdAt])
+  @@map("admin_requests")
 }
 
 // 주식 정보
@@ -165,7 +212,7 @@ model Stock {
   price        BigInt      @db.UnsignedBigInt
   listingPrice BigInt      @map("listing_price") @db.UnsignedBigInt
   status       StockStatus @default(PENDING)
-  publishedAt  DateTime?   @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
+  publishedAt  DateTime?   @map("published_at")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime?   @updatedAt @map("updated_at")
 
@@ -174,7 +221,7 @@ model Stock {
   trades     Trade[]
   candles    Candle[]
 
-  @@index([publishedAt]) // 릴레이가 미발행 주식 스캔
+  @@index([publishedAt])
   @@map("stocks")
 }
 
@@ -223,10 +270,10 @@ model Order {
   filledQuantity BigInt             @map("filled_quantity") @db.UnsignedBigInt
   orderType      OrderType          @map("order_type")
   status         OrderStatus        @default(RECEIVED)
-  rejectReason   OrderRejectReason? @map("reject_reason") // status=REJECTED일 때만
+  rejectReason   OrderRejectReason? @map("reject_reason")
   tradingType    TradingType        @map("trading_type")
-  cancelReason   CancelReason?      @map("cancel_reason") // tradingType=CANCEL일 때만
-  publishedAt    DateTime?          @map("published_at") // 큐 적재 성공 시각 (null = 미발행)
+  cancelReason   CancelReason?      @map("cancel_reason")
+  publishedAt    DateTime?          @map("published_at")
   fullyFilledAt  DateTime?          @map("fully_filled_at") // 전량 체결 시각 (null = 미체결/부분체결)
   createdAt      DateTime           @default(now()) @map("created_at")
 
@@ -239,7 +286,7 @@ model Order {
   tradesAsMaker Trade[] @relation("TradeMaker")
   tradesAsTaker Trade[] @relation("TradeTaker")
 
-  @@index([publishedAt]) // 릴레이가 미발행 주문 스캔
+  @@index([publishedAt])
   @@index([stockId, status, tradingType, price])
   @@index([accountId, status, createdAt])
   @@index([accountId, createdAt])
@@ -268,13 +315,15 @@ model Trade {
 model Snapshot {
   id            BigInt   @id @default(autoincrement())
   state         Bytes    @map("state") @db.LongBlob // 직렬화된 엔진 전체 상태
-  inputWalIndex BigInt   @map("input_wal_index") @db.UnsignedBigInt
+  inputWalIndex BigInt   @map("input_wal_index") @db.UnsignedBigInt // 스냅샷에 반영된 Input WAL Index
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@map("snapshots")
 }
 
-// 커서
+// 커서 
+// NOTE: 엔진에서 Output WAL을 기반으로 이벤트와 DB를 업데이트 하는 고루틴이 존재
+// 이들이 어느 Output WAL까지 읽었는지 엔진 복구시 필요하기 때문에 이를 저장하는 테이블이 필요함
 model Cursor {
   type  CursorType @id
   index BigInt

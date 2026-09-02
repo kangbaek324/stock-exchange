@@ -84,8 +84,17 @@ export class AccountService {
         return accounts;
     }
 
-    // status는 MQ 발행 여부 추적용일 뿐 계좌 활성/비활성 판단에는 쓰지 않는다
     async getAccount(accountNumber: number) {
+        const account = await this.prismaService.account.findUnique({
+            where: { accountNumber },
+            select: { id: true, userId: true },
+        });
+        if (!account) throw new AccountException('ACCOUNT_NOT_FOUND');
+
+        return account;
+    }
+
+    async getAccountWithBalance(accountNumber: number) {
         const account = await this.prismaService.account.findUnique({
             where: { accountNumber },
             select: { id: true, userId: true, availableBalance: true },
@@ -102,8 +111,14 @@ export class AccountService {
             try {
                 const parsed = BigInt(cachedBalance);
                 if (parsed >= 0n) availableBalance = parsed;
+                else
+                    this.logger.warn(
+                        `Negative cached availableBalance, falling back to DB (accountId=${account.id}, cached=${cachedBalance})`,
+                    );
             } catch {
-                // 파싱 불가한 값이면 DB 값 유지
+                this.logger.warn(
+                    `Invalid cached availableBalance, falling back to DB (accountId=${account.id}, cached=${cachedBalance})`,
+                );
             }
         }
 
@@ -111,6 +126,51 @@ export class AccountService {
             id: account.id,
             userId: account.userId,
             availableBalance,
+        };
+    }
+
+    // 계좌 + 특정 종목 보유 수량 조회 (보유 없으면 0)
+    async getAccountWithStockQuantity(accountNumber: number, stockId: number) {
+        const account = await this.prismaService.account.findUnique({
+            where: { accountNumber },
+            select: { id: true, userId: true },
+        });
+        if (!account) throw new AccountException('ACCOUNT_NOT_FOUND');
+
+        const cachedQuantity = await this.redisCacheService.getField(
+            RedisKeys.holding(account.id, stockId),
+            'availableQuantity',
+        );
+
+        if (cachedQuantity != null) {
+            try {
+                const parsed = BigInt(cachedQuantity);
+                if (parsed >= 0n)
+                    return {
+                        id: account.id,
+                        userId: account.userId,
+                        availableQuantity: parsed,
+                    };
+
+                this.logger.warn(
+                    `Negative cached availableQuantity, falling back to DB (accountId=${account.id}, stockId=${stockId}, cached=${cachedQuantity})`,
+                );
+            } catch {
+                this.logger.warn(
+                    `Invalid cached availableQuantity, falling back to DB (accountId=${account.id}, stockId=${stockId}, cached=${cachedQuantity})`,
+                );
+            }
+        }
+
+        const userStock = await this.prismaService.userStock.findUnique({
+            where: { accountId_stockId: { accountId: account.id, stockId } },
+            select: { availableQuantity: true },
+        });
+
+        return {
+            id: account.id,
+            userId: account.userId,
+            availableQuantity: userStock?.availableQuantity ?? 0n,
         };
     }
 
@@ -216,7 +276,7 @@ export class AccountService {
         senderAccountNumber: number,
     ): Promise<unknown> {
         // 발신자
-        const sender = await this.getAccount(senderAccountNumber);
+        const sender = await this.getAccountWithBalance(senderAccountNumber);
         if (sender.userId !== user.id) throw new AccountException('ACCOUNT_FORBIDDEN');
 
         // 수신자
@@ -256,10 +316,11 @@ export class AccountService {
 
     // 계좌 송금 내역 조회
     async getTransferList(user: User, dto: GetTransferDto, accountNumber: number) {
-        const accountId = await this.getOwnedAccountId(user, accountNumber);
+        const account = await this.getAccount(accountNumber);
+        if (account.userId !== user.id) throw new AccountException('ACCOUNT_FORBIDDEN');
 
         const where: Prisma.TransferWhereInput = {
-            ...this.buildDirectionFilter(accountId, dto.direction),
+            ...this.buildDirectionFilter(account.id, dto.direction),
         };
 
         const sortOrder: Prisma.SortOrder =
@@ -283,21 +344,9 @@ export class AccountService {
             totalPages: Math.ceil(total / dto.limit),
             hasNext: dto.page * dto.limit < total,
             items: transfers.map((transfer) =>
-                this.toTransferHistory(transfer, accountId),
+                this.toTransferHistory(transfer, account.id),
             ),
         };
-    }
-
-    // 소유권 검증 후 계좌 반환 (잔액 없는 ID 조회용)
-    private async getOwnedAccountId(user: User, accountNumber: number) {
-        const account = await this.prismaService.account.findUnique({
-            where: { accountNumber },
-            select: { id: true, userId: true },
-        });
-        if (!account) throw new AccountException('ACCOUNT_NOT_FOUND');
-        if (account.userId !== user.id) throw new AccountException('ACCOUNT_FORBIDDEN');
-
-        return account.id;
     }
 
     private buildDirectionFilter(

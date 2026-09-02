@@ -26,7 +26,7 @@ export class AccountController {
     }
 
     @Post('/')
-    async accountCreate(@GetUser() user: User): Promise<unknown> {
+    async createAccount(@GetUser() user: User): Promise<unknown> {
         return await this.accountService.createAccount(user);
     }
 
@@ -47,48 +47,4 @@ export class AccountController {
     ) {
         return await this.accountService.getTransferList(user, query, accountNumber);
     }
-
-    // ADMIN //
-
-    // @UseGuards(AdminGuard)
-    // @Roles('ADMIN')
-    // @Post('/:accountNumber/deposit')
-    // async depositAccountBalance(
-    //     @Param('accountNumber') accountNumber: number,
-    //     @Body() dto: DepositAccountBalanceDto,
-    // ) {
-    //     return await this.accountService.depositAccountBalance(dto, accountNumber);
-    // }
-
-    // @UseGuards(AdminGuard)
-    // @Roles('ADMIN')
-    // @Post('/:accountNumber/withdraw')
-    // async withdrawAccountBalance(
-    //     @Param('accountNumber') accountNumber: number,
-    //     @Body() dto: withDrawAccountBalanceDto,
-    // ) {
-    //     return await this.accountService.withdrawAccountBalance(dto, accountNumber);
-    // }
-
-    // @UseGuards(AdminGuard)
-    // @Roles('ADMIN')
-    // @Post('/:accountNumber/stocks/:stockId/deposit')
-    // async depositStock(
-    //     @Param('accountNumber') accountNumber: number,
-    //     @Param('stockId') stockId: number,
-    //     @Body() dto: DepositStockDto,
-    // ) {
-    //     return await this.accountService.depositStock(dto, accountNumber, stockId);
-    // }
-
-    // @UseGuards(AdminGuard)
-    // @Roles('ADMIN')
-    // @Post('/:accountNumber/stocks/:stockId/withdraw')
-    // async withdrawStock(
-    //     @Param('accountNumber') accountNumber: number,
-    //     @Param('stockId') stockId: number,
-    //     @Body() dto: DepositStockDto,
-    // ) {
-    //     return await this.accountService.withdrawStock(dto, accountNumber, stockId);
-    // }
 }

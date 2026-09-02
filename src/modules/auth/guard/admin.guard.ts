@@ -13,6 +13,7 @@ export class AdminGuard implements CanActivate {
     ): boolean | Promise<boolean> | Observable<boolean> {
         const requiredRole = this.reflector.getAllAndOverride(ROLES_KEY, [
             context.getHandler(),
+            context.getClass(),
         ]);
 
         const { user } = context.switchToHttp().getRequest();
