@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotImplementedException } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AccountStatus, Prisma, TransferStatus, User } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, retry, timer } from 'rxjs';
@@ -8,10 +8,6 @@ import { TransferMessage } from './type/transfer-message.type';
 import { DATA_SERVICE } from 'src/common/messaging/messaging.module';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { GetTransferDto, TransferDirection, TransferSort } from './dto/get-transfer.dto';
-import { DepositAccountBalanceDto } from './dto/deposit-account-balance.dto';
-import { WithdrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
-import { DepositStockDto } from './dto/deposit-stock.dto';
-import { WithdrawStockDto } from './dto/withdraw-stock.dto';
 import { AccountException } from './error/account.exception';
 import { RedisCacheService } from 'src/common/redis/redis-cache.service';
 import { RedisKeys } from 'src/common/redis/redis-keys';
@@ -390,38 +386,5 @@ export class AccountService {
             recipientAccountId: transfer.recipientAccountId.toString(),
             amount: transfer.amount.toString(),
         };
-    }
-
-    // Admin
-    // TODO: 엔진/데이터 서비스 연동 방식 확정 후 구현 (ADMIN_SERVICE 큐 발행 등)
-
-    // 계좌 잔고 입금
-    async depositAccountBalance(dto: DepositAccountBalanceDto, accountNumber: number) {
-        void dto;
-        void accountNumber;
-        throw new NotImplementedException();
-    }
-
-    // 계좌 잔고 출금
-    async withdrawAccountBalance(dto: WithdrawAccountBalanceDto, accountNumber: number) {
-        void dto;
-        void accountNumber;
-        throw new NotImplementedException();
-    }
-
-    // 보유 주식 입고
-    async depositStock(dto: DepositStockDto, accountNumber: number, stockId: number) {
-        void dto;
-        void accountNumber;
-        void stockId;
-        throw new NotImplementedException();
-    }
-
-    // 보유 주식 출고
-    async withdrawStock(dto: WithdrawStockDto, accountNumber: number, stockId: number) {
-        void dto;
-        void accountNumber;
-        void stockId;
-        throw new NotImplementedException();
     }
 }
