@@ -47,20 +47,32 @@ export class AccountAdminController {
     // 보유 주식 입고
     @Post('/:accountNumber/stocks/:stockId/deposit')
     async depositStock(
+        @GetUser() user: User,
         @Param('accountNumber', ParseIntPipe) accountNumber: number,
         @Param('stockId', ParseIntPipe) stockId: number,
         @Body() dto: DepositStockDto,
     ) {
-        return await this.accountAdminService.depositStock(dto, accountNumber, stockId);
+        return await this.accountAdminService.depositStock(
+            user,
+            dto,
+            accountNumber,
+            stockId,
+        );
     }
 
     // 보유 주식 출고
     @Post('/:accountNumber/stocks/:stockId/withdraw')
     async withdrawStock(
+        @GetUser() user: User,
         @Param('accountNumber', ParseIntPipe) accountNumber: number,
         @Param('stockId', ParseIntPipe) stockId: number,
         @Body() dto: WithdrawStockDto,
     ) {
-        return await this.accountAdminService.withdrawStock(dto, accountNumber, stockId);
+        return await this.accountAdminService.withdrawStock(
+            user,
+            dto,
+            accountNumber,
+            stockId,
+        );
     }
 }

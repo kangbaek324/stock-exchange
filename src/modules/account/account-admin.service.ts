@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotImplementedException } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AdminRequestStatus, AdminRequestType, Prisma, User } from '@prisma/client';
 import { ClientProxy } from '@nestjs/microservices';
 import { lastValueFrom, retry, timer } from 'rxjs';
@@ -10,23 +10,30 @@ import { WithdrawAccountBalanceDto } from './dto/withdraw-account-balance.dto';
 import { DepositStockDto } from './dto/deposit-stock.dto';
 import { WithdrawStockDto } from './dto/withdraw-stock.dto';
 import { AdminBalanceAdjustMessage } from './type/admin-balance-message.type';
+import { AdminStockAdjustMessage } from './type/admin-stock-message.type';
 import { AccountAdminException } from './error/account.exception';
 
-// admin.account.balance.adjust 발행에 필요한 필드
-const ADMIN_BALANCE_REQUEST_SELECT = {
+// AdminRequest 발행에 필요한 필드
+const ADMIN_REQUEST_SELECT = {
     id: true,
     type: true,
     payload: true,
 } satisfies Prisma.AdminRequestSelect;
 
-type PublishableAdminBalanceRequest = Prisma.AdminRequestGetPayload<{
-    select: typeof ADMIN_BALANCE_REQUEST_SELECT;
+type PublishableAdminRequest = Prisma.AdminRequestGetPayload<{
+    select: typeof ADMIN_REQUEST_SELECT;
 }>;
 
-// AdminRequest.payload 에 저장하는 계좌 잔고 증감 요청 형태
 type AccountBalancePayload = {
     accountId: number;
-    amount: number; // 항상 양수 원값. 방향은 AdminRequest.type 이 결정
+    amount: number;
+};
+
+type AccountStockPayload = {
+    accountId: number;
+    stockId: number;
+    amount: number;
+    average: number;
 };
 
 const PUBLISH_RETRY = {
@@ -44,9 +51,9 @@ export class AccountAdminService {
         private readonly accountService: AccountService,
     ) {}
 
-    // 계좌 잔고 입금/출금
+    // 계좌 잔고 입출금 / 보유 주식 입출고
     // 1. AdminRequest DB 생성 (status: RECEIVED)
-    // 2. MQ(admin.account.balance.adjust) 발행 시도
+    // 2. MQ 발행 시도
     //  2-1. 성공시 -> (publishedAt) 마킹
     //  2-2. 실패시 -> (publishedAt: null) 유지 및 별도 릴레이가 발행시도
     // 처리 결과(status/completedAt) 갱신은 엔진이 담당
@@ -86,6 +93,54 @@ export class AccountAdminService {
         );
     }
 
+    // 보유 주식 입고
+    async depositStock(
+        user: User,
+        dto: DepositStockDto,
+        accountNumber: number,
+        stockId: number,
+    ) {
+        await this.isStockExists(stockId);
+        const account = await this.accountService.getAccount(accountNumber);
+
+        return this.createStockAdjustRequest(
+            user,
+            { accountId: account.id, stockId, amount: dto.amount, average: dto.average },
+            AdminRequestType.STOCK_DEPOSIT,
+        );
+    }
+
+    // 보유 주식 출고
+    async withdrawStock(
+        user: User,
+        dto: WithdrawStockDto,
+        accountNumber: number,
+        stockId: number,
+    ) {
+        await this.isStockExists(stockId);
+        const account = await this.accountService.getAccountWithStockQuantity(
+            accountNumber,
+            stockId,
+        );
+        if (account.availableQuantity < dto.amount) {
+            throw new AccountAdminException('INSUFFICIENT_STOCK');
+        }
+
+        return this.createStockAdjustRequest(
+            user,
+            { accountId: account.id, stockId, amount: dto.amount, average: 0 },
+            AdminRequestType.STOCK_WITHDRAW,
+        );
+    }
+
+    private async isStockExists(stockId: number) {
+        const stock = await this.prismaService.stock.findUnique({
+            where: { id: stockId },
+            select: { id: true },
+        });
+        if (!stock) throw new AccountAdminException('STOCK_NOT_FOUND');
+    }
+
     private async createBalanceAdjustRequest(
         user: User,
         accountId: number,
@@ -96,16 +151,34 @@ export class AccountAdminService {
     ) {
         const payload: AccountBalancePayload = { accountId, amount };
 
+        return this.createAdminRequest(user, type, payload);
+    }
+
+    private async createStockAdjustRequest(
+        user: User,
+        payload: AccountStockPayload,
+        type:
+            | typeof AdminRequestType.STOCK_DEPOSIT
+            | typeof AdminRequestType.STOCK_WITHDRAW,
+    ) {
+        return this.createAdminRequest(user, type, payload);
+    }
+
+    private async createAdminRequest(
+        user: User,
+        type: AdminRequestType,
+        payload: AccountBalancePayload | AccountStockPayload,
+    ) {
         const request = await this.prismaService.adminRequest.create({
             data: {
                 type,
                 payload,
                 requestedBy: user.id,
             },
-            select: ADMIN_BALANCE_REQUEST_SELECT,
+            select: ADMIN_REQUEST_SELECT,
         });
 
-        await this.publishAdminBalanceAndMark(request);
+        await this.publishAdminRequestAndMark(request);
 
         return {
             id: request.id.toString(),
@@ -113,21 +186,26 @@ export class AccountAdminService {
         };
     }
 
-    // MQ에 admin.account.balance.adjust 발행 후 성공시 마킹
-    private async publishAdminBalanceAndMark(request: PublishableAdminBalanceRequest) {
+    // MQ에 AdminRequest를 발행 후 성공시 마킹
+    private async publishAdminRequestAndMark(request: PublishableAdminRequest) {
+        const dispatch = this.toAdminRequestDispatch(request);
+        if (!dispatch) {
+            this.logger.warn(
+                `No publish target for AdminRequest type=${request.type} (adminRequestId=${request.id})`,
+            );
+            return;
+        }
+
         try {
             await lastValueFrom(
                 this.client
-                    .emit(
-                        'admin.account.balance.adjust',
-                        this.toAdminBalanceMessage(request),
-                    )
+                    .emit(dispatch.topic, dispatch.message)
                     .pipe(retry(PUBLISH_RETRY)),
             );
         } catch (err) {
             // 실패시 별도 릴레이가 처리
             this.logger.warn(
-                `Failed to publish admin.account.balance.adjust (adminRequestId=${request.id})`,
+                `Failed to publish ${dispatch.topic} (adminRequestId=${request.id})`,
                 err instanceof Error ? err.stack : err,
             );
             return;
@@ -149,18 +227,38 @@ export class AccountAdminService {
                 status: AdminRequestStatus.RECEIVED,
                 createdAt: { lt: new Date(Date.now() - 2000) },
             },
-            select: ADMIN_BALANCE_REQUEST_SELECT,
+            select: ADMIN_REQUEST_SELECT,
             take: 100,
             orderBy: { id: 'asc' },
         });
 
         for (const request of pending) {
-            await this.publishAdminBalanceAndMark(request);
+            await this.publishAdminRequestAndMark(request);
+        }
+    }
+
+    // AdminRequest.type 별 발행 토픽/메시지
+    private toAdminRequestDispatch(request: PublishableAdminRequest) {
+        switch (request.type) {
+            case AdminRequestType.ACCOUNT_DEPOSIT:
+            case AdminRequestType.ACCOUNT_WITHDRAW:
+                return {
+                    topic: 'admin.account.balance.adjust',
+                    message: this.toAdminBalanceMessage(request),
+                };
+            case AdminRequestType.STOCK_DEPOSIT:
+            case AdminRequestType.STOCK_WITHDRAW:
+                return {
+                    topic: 'admin.stock.balance.adjust',
+                    message: this.toAdminStockMessage(request),
+                };
+            default:
+                return null;
         }
     }
 
     private toAdminBalanceMessage(
-        request: PublishableAdminBalanceRequest,
+        request: PublishableAdminRequest,
     ): AdminBalanceAdjustMessage {
         const { accountId, amount } = request.payload as AccountBalancePayload;
         const delta =
@@ -173,19 +271,19 @@ export class AccountAdminService {
         };
     }
 
-    // 보유 주식 입고
-    async depositStock(dto: DepositStockDto, accountNumber: number, stockId: number) {
-        void dto;
-        void accountNumber;
-        void stockId;
-        throw new NotImplementedException();
-    }
+    private toAdminStockMessage(
+        request: PublishableAdminRequest,
+    ): AdminStockAdjustMessage {
+        const { accountId, stockId, amount, average } =
+            request.payload as AccountStockPayload;
+        const delta = request.type === AdminRequestType.STOCK_WITHDRAW ? -amount : amount;
 
-    // 보유 주식 출고
-    async withdrawStock(dto: WithdrawStockDto, accountNumber: number, stockId: number) {
-        void dto;
-        void accountNumber;
-        void stockId;
-        throw new NotImplementedException();
+        return {
+            id: request.id.toString(),
+            accountId: accountId.toString(),
+            stockId: stockId.toString(),
+            delta: delta.toString(),
+            average: average.toString(),
+        };
     }
 }

@@ -129,6 +129,51 @@ export class AccountService {
         };
     }
 
+    // 계좌 + 특정 종목 보유 수량 조회 (보유 없으면 0)
+    async getAccountWithStockQuantity(accountNumber: number, stockId: number) {
+        const account = await this.prismaService.account.findUnique({
+            where: { accountNumber },
+            select: { id: true, userId: true },
+        });
+        if (!account) throw new AccountException('ACCOUNT_NOT_FOUND');
+
+        const cachedQuantity = await this.redisCacheService.getField(
+            RedisKeys.holding(account.id, stockId),
+            'availableQuantity',
+        );
+
+        if (cachedQuantity != null) {
+            try {
+                const parsed = BigInt(cachedQuantity);
+                if (parsed >= 0n)
+                    return {
+                        id: account.id,
+                        userId: account.userId,
+                        availableQuantity: parsed,
+                    };
+
+                this.logger.warn(
+                    `Negative cached availableQuantity, falling back to DB (accountId=${account.id}, stockId=${stockId}, cached=${cachedQuantity})`,
+                );
+            } catch {
+                this.logger.warn(
+                    `Invalid cached availableQuantity, falling back to DB (accountId=${account.id}, stockId=${stockId}, cached=${cachedQuantity})`,
+                );
+            }
+        }
+
+        const userStock = await this.prismaService.userStock.findUnique({
+            where: { accountId_stockId: { accountId: account.id, stockId } },
+            select: { availableQuantity: true },
+        });
+
+        return {
+            id: account.id,
+            userId: account.userId,
+            availableQuantity: userStock?.availableQuantity ?? 0n,
+        };
+    }
+
     // 계좌 개설
     // 1. DB 계좌 생성 (status: PENDING)
     // 2. MQ 발행 시도

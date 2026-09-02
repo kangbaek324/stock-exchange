@@ -29,6 +29,16 @@ export const AccountAdminError = {
         status: HttpStatus.CONFLICT,
         message: '계좌 잔액이 충분하지 않습니다.',
     },
+    INSUFFICIENT_STOCK: {
+        code: 'ACCOUNT_ADMIN_002',
+        status: HttpStatus.CONFLICT,
+        message: '보유 주식 수가 충분하지 않습니다.',
+    },
+    STOCK_NOT_FOUND: {
+        code: 'ACCOUNT_ADMIN_003',
+        status: HttpStatus.NOT_FOUND,
+        message: '존재하지 않는 종목코드입니다.',
+    },
 } as const;
 
 export type AccountErrorKey = keyof typeof AccountError;
